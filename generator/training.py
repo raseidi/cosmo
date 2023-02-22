@@ -1,0 +1,148 @@
+import os
+import torch
+from .utils import save_checkpoint, ensure_dir
+
+
+def train_step(
+    model, data_loader, criterion_clf, criterion_rt, device, optimizer, sc=None
+):
+    model.train()
+    loss_clf, acc = 0, 0
+    loss_rt = 0
+    for X, y in data_loader:
+        x = [d.to(device) for d in X]
+        y = [d.to(device) for d in y]
+
+        na, rt = model(x)
+
+        l_clf = criterion_clf(na, y[0].long())
+        l_rt = criterion_rt(rt, y[1].unsqueeze(1))
+
+        mask = y[0] != 0
+        l_clf_masked = l_clf.where(mask, torch.tensor(0.0, device="cuda"))
+        l_clf = l_clf_masked.sum() / mask.sum()
+
+        l_rt = criterion_rt(rt, y[1].unsqueeze(1))
+        l_rt_masked = l_rt.where(mask, torch.tensor(0.0, device="cuda"))
+        l_rt = l_rt_masked.sum() / mask.sum()
+
+        loss_clf += l_clf.item()
+        loss_rt += l_rt.item()
+
+        loss = l_clf + l_rt
+        loss.backward()
+        optimizer.step()
+        # see https://stackoverflow.com/a/46820512
+        model.zero_grad()  # this can be outside the loop
+
+        y_pred_class = torch.argmax(torch.softmax(na, dim=1), dim=1)
+        acc += (y_pred_class == y[0]).sum().item() / len(na)
+    if sc:
+        sc.step()
+    loss_clf /= len(data_loader)
+    loss_rt /= len(data_loader)
+    acc /= len(data_loader)
+    return loss_clf, acc, loss_rt
+
+
+def eval(model, data_loader, criterion_clf, criterion_rt, device):
+    model.eval()
+    loss_clf, loss_rt, acc = 0, 0, 0
+    with torch.inference_mode():
+        for X, y in data_loader:
+            x = [d.to(device) for d in X]
+            y = [d.to(device) for d in y]
+
+            na, rt = model(x)
+
+            # todo: mask pad tokens
+            # see https://discuss.pytorch.org/t/ignore-padding-area-in-loss-computation/95804/5
+            # no need for masking since we are doing left padding
+            l_clf = criterion_clf(na, y[0].long())
+            l_rt = criterion_rt(rt, y[1].unsqueeze(1))
+
+            loss_clf += l_clf.item()
+            loss_rt += l_rt.item()
+
+            y_pred_class = torch.argmax(torch.softmax(na, dim=1), dim=1)
+            acc += (y_pred_class == y[0]).sum().item() / len(y_pred_class)
+
+    loss_clf /= len(data_loader)
+    loss_rt /= len(data_loader)
+    acc /= len(data_loader)
+    return loss_clf, acc, loss_rt
+
+
+def train(
+    model,
+    train_loader,
+    test_loader,
+    loss_fn,
+    optimizer,
+    sc=None,
+    logger=None,
+    check_point=None,
+):
+    # ToDo: handle when logger is None
+    model_path = (
+        f"models/{logger.config.dataset}/{logger.config.condition}/{logger.name}/"
+    )
+    ensure_dir(model_path)
+    model.to(logger.config.device)
+    best_acc = 0
+    for epoch in range(logger.config.epochs):
+        train_loss, train_acc, train_loss_rt = train_step(
+            model=model,
+            data_loader=train_loader,
+            criterion_clf=loss_fn["clf"],
+            criterion_rt=loss_fn["reg"],
+            device=logger.config.device,
+            optimizer=optimizer,
+            sc=sc,
+        )
+        test_loss, test_acc, test_loss_rt = eval(
+            model=model,
+            data_loader=test_loader,
+            criterion_clf=loss_fn["clf"],
+            criterion_rt=loss_fn["reg"],
+            device=logger.config.device,
+        )
+
+        # logging time error in days
+        test_loss_rt = torch.exp(torch.tensor(test_loss_rt)).item() / (24 * 60 * 60)
+        train_loss_rt = torch.exp(torch.tensor(train_loss_rt)).item() / (24 * 60 * 60)
+        print(
+            f"Epoch: {epoch+1} | "
+            f"train_loss: {train_loss:.4f} | "
+            f"test_loss: {test_loss:.4f} | "
+            f"train_acc: {train_acc:.4f} | "
+            f"test_acc: {test_acc:.4f} | "
+            f"train_loss_rt: {train_loss_rt:.4f} days| "  # outcome is in log secs
+            f"test_loss_rt: {test_loss_rt:.4f} days| "
+        )
+
+        if logger:
+            logger.log(
+                {
+                    "train_loss": train_loss,
+                    "train_acc": train_acc,
+                    "train_loss_rt(days)": train_loss_rt,
+                    "test_loss": test_loss,
+                    "test_acc": test_acc,
+                    "test_loss_rt(days)": test_loss_rt,
+                }
+            )
+        is_best = test_acc > best_acc
+        best_acc = test_acc if is_best else best_acc
+
+        cpkt = {
+            "net": model.state_dict(),
+            "epoch": epoch,
+            "test_acc": test_acc,
+            "optim": optimizer.state_dict(),
+        }
+        save_checkpoint(
+            cpkt, os.path.join(model_path, "checkpoint.ckpt"), is_best=is_best
+        )
+
+    return
