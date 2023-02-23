@@ -59,33 +59,38 @@ def clean_directory(path):
     shutil.rmtree(path)
 
 
-def check_directory(args):
-    output_path = os.path.join("data", args.dataset, args.condition)
+def log_exists(args):
+    """Check if a preprocessed log already exists.
+
+    Args:
+        args (_type_): arguments
+    """
+    output_path = os.path.join("data", args.dataset)
     ensure_dir(output_path)
     if args.overwrite:
         clean_directory(output_path)
+        return False
     else:
-        if os.path.exists(os.path.join(output_path, "log.csv")):
-            import sys
-            sys.exit(1)
-            # raise Exception(
-            #     "A log.csv already exists for this dataset under the provided condition. Set -o argument as True if you wish to overwrite it."
-            # )
+        return os.path.exists(os.path.join(output_path, "log.csv"))
 
 
+LABEL_FUNCTION = {"trace_time": pp.trace_time, "resource_usage": pp.resource_usage}
 if __name__ == "__main__":
     args = get_args_parser().parse_args()
-    check_directory(args)
+    output = os.path.join("data", args.dataset)
 
-    train = read_data(os.path.join(args.path, "train.csv"), format_cols=True)
-    test = read_data(os.path.join(args.path, "test.csv"), format_cols=True)
-    train["type_set"] = "train"
-    test["type_set"] = "test"
-    df = pd.concat((train, test))
-    df = create_features(df)
+    if not log_exists(args):
+        train = read_data(os.path.join(args.path, "train.csv"), format_cols=True)
+        test = read_data(os.path.join(args.path, "test.csv"), format_cols=True)
+        train["type_set"] = "train"
+        test["type_set"] = "test"
+        df = pd.concat((train, test))
+        df = create_features(df)
+    else:
+        df = pd.read_csv(os.path.join(output, "log.csv"))
 
-    # condition
-    df["target"] = pp.trace_time(df)
-
-    save_path = os.path.join("data", args.dataset, args.condition)
-    df.to_csv(os.path.join(save_path, "log.csv"), index=False)
+    if args.condition in df.columns:
+        pass
+    else:
+        df[args.condition] = LABEL_FUNCTION[args.condition](df)
+        df.to_csv(os.path.join(output, "log.csv"), index=False)

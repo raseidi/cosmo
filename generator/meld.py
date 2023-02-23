@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 
 
-def index_of_ngrams(log):
+def index_of_ngrams(log, prefix_len=5):
     from nltk import ngrams
 
     log = log.reset_index(drop=True)
@@ -14,7 +14,7 @@ def index_of_ngrams(log):
     def f_ngram(group_ids):
         # indicies of ngrams for each group (case)
         return list(
-            ngrams(group_ids, n=5, pad_left=True, left_pad_symbol=0)
+            ngrams(group_ids, n=prefix_len, pad_left=True, left_pad_symbol=0)
         )  # 0 is the reference index for padding
 
     cases_ngrams = log.reset_index().groupby("case_id")["index"].apply(f_ngram).values
@@ -76,9 +76,15 @@ def prepare_log(log):
     return log
 
 
-def vectorize_log(log, include_cols=["activity", "resource", "remaining_time"]):
-    train_ngrams_ix = index_of_ngrams(log[log["type_set"] == "train"])
-    test_ngrams_ix = index_of_ngrams(log[log["type_set"] == "test"])
+def vectorize_log(
+    log, include_cols=["activity", "resource", "remaining_time"], prefix_len=5
+):
+    train_ngrams_ix = index_of_ngrams(
+        log[log["type_set"] == "train"], prefix_len=prefix_len
+    )
+    test_ngrams_ix = index_of_ngrams(
+        log[log["type_set"] == "test"], prefix_len=prefix_len
+    )
 
     train_events = log.loc[
         log["type_set"].isin(["<pad>", "train"]), include_cols

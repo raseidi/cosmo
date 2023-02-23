@@ -61,7 +61,9 @@ class MTCondLSTM(nn.Module):
         # ToDo: a better way to track/manage each event feature
         embs = None
         for ix, feature in enumerate(self.vocabs):
-            values = e[:, :, ix].long() # selecting the categorical attribute; a better way to do this is need
+            values = e[
+                :, :, ix
+            ].long()  # selecting the categorical attribute; a better way to do this is need
             emb = self.embeddings[feature]
 
             if embs is None:

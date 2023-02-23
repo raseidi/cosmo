@@ -2,3 +2,6 @@ data/
 models/
 wandb/
 notes
+*.pyc
+__pycache__/
+.vscode

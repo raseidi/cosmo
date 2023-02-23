@@ -7,8 +7,7 @@ def train_step(
     model, data_loader, criterion_clf, criterion_rt, device, optimizer, sc=None
 ):
     model.train()
-    loss_clf, acc = 0, 0
-    loss_rt = 0
+    loss_rt, loss_clf, correct = 0, 0, 0
     for X, y in data_loader:
         x = [d.to(device) for d in X]
         y = [d.to(device) for d in y]
@@ -18,16 +17,8 @@ def train_step(
         l_clf = criterion_clf(na, y[0].long())
         l_rt = criterion_rt(rt, y[1].unsqueeze(1))
 
-        mask = y[0] != 0
-        l_clf_masked = l_clf.where(mask, torch.tensor(0.0, device="cuda"))
-        l_clf = l_clf_masked.sum() / mask.sum()
-
-        l_rt = criterion_rt(rt, y[1].unsqueeze(1))
-        l_rt_masked = l_rt.where(mask, torch.tensor(0.0, device="cuda"))
-        l_rt = l_rt_masked.sum() / mask.sum()
-
-        loss_clf += l_clf.item()
-        loss_rt += l_rt.item()
+        loss_clf += l_clf.item() * len(X[0])  # reduction=mean
+        loss_rt += l_rt.item() * len(X[0])
 
         loss = l_clf + l_rt
         loss.backward()
@@ -36,18 +27,18 @@ def train_step(
         model.zero_grad()  # this can be outside the loop
 
         y_pred_class = torch.argmax(torch.softmax(na, dim=1), dim=1)
-        acc += (y_pred_class == y[0]).sum().item() / len(na)
+        correct += (y_pred_class == y[0]).sum().item()
     if sc:
         sc.step()
-    loss_clf /= len(data_loader)
-    loss_rt /= len(data_loader)
-    acc /= len(data_loader)
+    loss_clf /= len(data_loader.dataset)
+    loss_rt /= len(data_loader.dataset)  # test loss is what matters tho
+    acc = correct / len(data_loader.dataset)
     return loss_clf, acc, loss_rt
 
 
 def eval(model, data_loader, criterion_clf, criterion_rt, device):
     model.eval()
-    loss_clf, loss_rt, acc = 0, 0, 0
+    loss_clf, loss_rt, correct = 0, 0, 0
     with torch.inference_mode():
         for X, y in data_loader:
             x = [d.to(device) for d in X]
@@ -61,15 +52,15 @@ def eval(model, data_loader, criterion_clf, criterion_rt, device):
             l_clf = criterion_clf(na, y[0].long())
             l_rt = criterion_rt(rt, y[1].unsqueeze(1))
 
-            loss_clf += l_clf.item()
-            loss_rt += l_rt.item()
+            loss_clf += l_clf.item() * len(X[0])  # reduction=mean
+            loss_rt += l_rt.item() * len(X[0])
 
             y_pred_class = torch.argmax(torch.softmax(na, dim=1), dim=1)
-            acc += (y_pred_class == y[0]).sum().item() / len(y_pred_class)
+            correct += (y_pred_class == y[0]).sum().item()
 
-    loss_clf /= len(data_loader)
-    loss_rt /= len(data_loader)
-    acc /= len(data_loader)
+    loss_clf /= len(data_loader.dataset)
+    loss_rt /= len(data_loader.dataset)
+    acc = correct / len(data_loader.dataset)
     return loss_clf, acc, loss_rt
 
 

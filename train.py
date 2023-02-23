@@ -1,11 +1,9 @@
-from argparse import Namespace
 import torch
 import wandb
-import pandas as pd
+import pprint
 
 from torch import nn
 from torch.optim.lr_scheduler import MultiStepLR
-from torch.utils.data import DataLoader
 
 from generator.meld import vectorize_log, prepare_log
 from generator.data_loader import get_loader
@@ -40,38 +38,6 @@ def get_args_parser(add_help=True):
         type=str,
         help="device (Use cuda or cpu Default: cuda)",
     )
-    parser.add_argument(
-        "-b",
-        "--batch-size",
-        default=64,
-        type=int,
-        help="batch size, the total batch size is $NGPU x batch_size",
-    )
-    parser.add_argument(
-        "--epochs",
-        default=10,
-        type=int,
-        metavar="N",
-        help="number of total epochs to run",
-    )
-    parser.add_argument("--lr", default=5e-3, type=float, help="initial learning rate")
-
-    parser.add_argument(
-        "--wd",
-        "--weight-decay",
-        default=0,
-        type=float,
-        metavar="W",
-        help="weight decay (default: None)",
-        dest="weight_decay",
-    )
-
-    parser.add_argument(
-        "--scheduler",
-        default=None,
-        type=str,
-        help="the lr scheduler (default: steplr)",
-    )
 
     return parser
 
@@ -90,33 +56,24 @@ def get_vocabs(log, features=["activity", "resource"]):
     return vocabs
 
 
-def experiment_exists(params, run_name):
-    try:
-        runs_df = get_runs(run_name)
-    except:
-        return False
-    try:
-        return runs_df[
-            (runs_df["dataset"] == params.dataset)
-            & (runs_df["condition"] == params.condition)
-            & (runs_df["learning_rate"] == params.lr)
-            & (runs_df["epochs"] == params.epochs)
-            & (runs_df["weight_decay"] == params.weight_decay)
-            & (runs_df["batch_size"] == params.batch_size)
-            & (runs_df["device"] == params.device)
-        ].empty
-    except:
-        return False
+def main(config=None):
+    params = get_args_parser().parse_args()
+    if params.device == "cuda":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # print("Warning; gpu not available") #todo
 
-
-
-def main(params):
-    print(params)
-    run_name = f"multi-task-{params.condition.replace('_', '-')}"
-    # if experiment_exists(params, run_name):
-    #     raise Exception("Experiment has already been done.")
-
-    log = read_data(f"data/{params.dataset}/{params.condition}/log.csv")
+    logger = wandb.init(config=config)
+    logger.config.update(
+        {
+            "dataset": params.dataset,
+            "condition": params.condition,
+            "device": device.type,
+        }
+    )
+    config = logger.config
+    log = read_data(f"data/{params.dataset}/log.csv")
+    log["target"] = log[params.condition]
+    log.drop(["trace_time", "resource_usage"], axis=1, inplace=True)
     log = prepare_log(log)
     vocabs = get_vocabs(log)
     # encoding
@@ -126,11 +83,11 @@ def main(params):
     # ToDo how to track cat features? here we have (act, res, rt)
     data_train, data_test = vectorize_log(log)
 
-    train_loader = get_loader(data_train, batch_size=params.batch_size)
-    test_loader = get_loader(data_test, batch_size=1000, shuffle=False)
+    train_loader = get_loader(data_train, batch_size=config.batch_size)
+    test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
 
     torch.manual_seed(0)
-    model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
+    model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
 
     def init_weights(m):
         if isinstance(m, nn.Linear):
@@ -139,34 +96,25 @@ def main(params):
 
     model.apply(init_weights)
 
-    model.to(params.device)
+    model.to(device)
+    wandb.watch(model, log="all")
     # X, y = next(iter(train_loader))
     # model(X)
 
-    # logger = wandb.init(project="multi-task-time-condition")
-    logger = wandb.init(project=run_name)
-    logger.config.update(
-        {
-            "dataset": params.dataset,
-            "condition": params.condition,
-            "batch_size": params.batch_size,
-            "epochs": params.epochs,
-            "learning_rate": params.lr,
-            "weight_decay": params.weight_decay,
-            "scheduler": params.scheduler,
-            "device": params.device,
-        }
-    )
-    wandb.watch(model, log="all")
-
     criterion = {"clf": nn.CrossEntropyLoss(), "reg": nn.MSELoss()}
-    optm = torch.optim.Adam(
-        model.parameters(), lr=params.lr, weight_decay=params.weight_decay
-    )
-    if params.scheduler:
-        sc = MultiStepLR(optm, milestones=[25, 35], gamma=0.1)
-    else:
-        sc = None
+    if config.optimizer == "sgd":
+        optm = torch.optim.SGD(
+            model.parameters(),
+            lr=config.lr,
+            momentum=0.9,
+            weight_decay=config.weight_decay,
+        )
+    elif config.optimizer == "adam":
+        optm = torch.optim.Adam(
+            model.parameters(), lr=config.lr, weight_decay=config.weight_decay
+        )
+    sc = MultiStepLR(optm, milestones=[25, 35], gamma=0.1)
+
     train(
         model=model,
         train_loader=train_loader,
@@ -178,8 +126,19 @@ def main(params):
     )
     logger.finish()
 
-
 if __name__ == "__main__":
     params = get_args_parser().parse_args()
-    # print(params)
-    main(params)
+    sweep_config = {
+        "method": "bayes",
+        "name": params.dataset,
+        "metric": {"name": "test_loss", "goal": "minimize"},
+        "parameters": {
+            "optimizer": {"values": ["adam", "sgd"]},
+            "lr": {"max": 1e-3, "min": 1e-6},
+            "epochs": {"values": [50]},
+            "batch_size": {"values": [64, 256, 512]},
+            "weight_decay": {"values": [0.0, 1e-2, 1e-3]},
+        },
+    }
+    sweep_id = wandb.sweep(sweep_config, project=f"multi-task")
+    wandb.agent(sweep_id, main, count=5)

@@ -20,7 +20,23 @@ def trace_time(df, threshold="mean"):
     """
     total_time = df.groupby("case_id")["time"].apply(lambda x: x.max() - x.min())
     labeled_cases = total_time >= total_time.mean()
-    labeled_cases.name = "target"
+    labeled_cases.name = "trace_time"
     df = df.merge(labeled_cases, on="case_id")
-    df["target"] = np.where(0, 1, df.target)
-    return df["target"].values
+    df["trace_time"] = np.where(0, 1, df.trace_time)
+    return df["trace_time"].values
+
+
+def resource_usage(df):
+    """This function labels cases that use the second most frequent resource.
+
+    This is due to the fact most event logs have the the most frequent resource present
+    in all cases.
+    Args:
+        df (pd.DataFrame): event log dataframe
+    """
+    most_frequent_resource = df["resource"].value_counts().nlargest(2).idxmin()
+    df["resource_usage"] = df.groupby("case_id")["resource"].transform(
+        lambda group: most_frequent_resource in group.unique()
+    )
+    df["resource_usage"] = df["resource_usage"].astype(int)
+    return df["resource_usage"].values
