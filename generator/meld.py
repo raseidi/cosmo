@@ -9,7 +9,7 @@ import numpy as np
 def index_of_ngrams(log, prefix_len=5):
     from nltk import ngrams
 
-    log = log.reset_index(drop=True)
+    log.reset_index(inplace=True, drop=True)
 
     def f_ngram(group_ids):
         # indicies of ngrams for each group (case)
@@ -82,21 +82,22 @@ def prepare_log(log):
 def vectorize_log(
     log, include_cols=["activity", "resource", "remaining_time"], prefix_len=5
 ):
-    train_ngrams_ix = index_of_ngrams(
-        log[log["type_set"] == "train"], prefix_len=prefix_len
+    def _vectorize(log, learning_set="train"):
+        ngrams_ix = index_of_ngrams(
+            log[log["type_set"] == learning_set], prefix_len=prefix_len
+        )
+        events = log.loc[
+            log["type_set"].isin(["<pad>", learning_set]), include_cols
+        ].values
+        condition = log.loc[
+            log["type_set"].isin(["<pad>", learning_set]), "target"
+        ].values
+        return events, condition, ngrams_ix
+
+    train_events, train_condition, train_ngrams_ix = _vectorize(
+        log, learning_set="train"
     )
-    test_ngrams_ix = index_of_ngrams(
-        log[log["type_set"] == "test"], prefix_len=prefix_len
-    )
-
-    train_events = log.loc[
-        log["type_set"].isin(["<pad>", "train"]), include_cols
-    ].values
-    test_events = log.loc[log["type_set"].isin(["<pad>", "test"]), include_cols].values
-
-    train_condition = log.loc[log["type_set"].isin(["<pad>", "train"]), "target"].values
-    test_condition = log.loc[log["type_set"].isin(["<pad>", "train"]), "target"].values
-
+    test_events, test_condition, test_ngrams_ix = _vectorize(log, learning_set="test")
     train = (
         train_events,
         train_condition,

@@ -54,11 +54,11 @@ def main(config=None):
             "dataset": params.dataset,
             "condition": params.condition,
             "device": device.type,
-            "lr": 1e-5,
-            "batch_size": 64,
-            "weight_decay": 0.01,
-            "epochs": 50,
-            "optimizer": "adam",
+            # "lr": 1e-5,
+            # "batch_size": 64,
+            # "weight_decay": 0.01,
+            # "epochs": 50,
+            # "optimizer": "adam",
         }
     )
     config = logger.config
@@ -77,7 +77,7 @@ def main(config=None):
 
     train_loader = get_loader(data_train, batch_size=config.batch_size)
     test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
-
+        
     torch.manual_seed(0)
     model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
 
@@ -121,28 +121,18 @@ def main(config=None):
 
 
 if __name__ == "__main__":
-    datasets = [
-        "bpi_challenge_2013_incidents",
-        "BPI_Challenge_2012_W_Complete",
-        "BPI_Challenge_2012_Complete",
-        "BPI_Challenge_2012_W",
-        "BPI_Challenge_2012",
-    ]
-
     params = get_args_parser().parse_args()
-    # main()
-    if params.dataset in datasets:
-        sweep_config = {
-            "method": "bayes",
-            "name": f"{params.dataset}-{params.condition}",
-            "metric": {"name": "test_loss", "goal": "minimize"},
-            "parameters": {
-                "optimizer": {"values": ["adam", "sgd"]},
-                "lr": {"max": 1e-3, "min": 1e-6},
-                "epochs": {"values": [50]},
-                "batch_size": {"values": [64, 256, 512]},
-                "weight_decay": {"values": [0.0, 1e-2, 1e-3]},
-            },
-        }
-        sweep_id = wandb.sweep(sweep_config, project="multi-task")
-        wandb.agent(sweep_id, main, count=10)
+    sweep_config = {
+        "method": "bayes",
+        "name": f"{params.dataset}-{params.condition}",
+        "metric": {"name": "test_loss", "goal": "minimize"},
+        "parameters": {
+            "optimizer": {"values": ["adam", "sgd"]},
+            "lr": {"max": 1e-3, "min": 1e-6},
+            "epochs": {"values": [50]},
+            "batch_size": {"values": [64, 256, 512]},
+            "weight_decay": {"values": [0.0, 1e-2, 1e-3]},
+        },
+    }
+    sweep_id = wandb.sweep(sweep_config, project="multi-task")
+    wandb.agent(sweep_id, main, count=10)
