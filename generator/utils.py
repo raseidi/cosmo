@@ -70,34 +70,23 @@ def ensure_dir(dir_name: str):
         os.makedirs(dir_name)
 
 
-def get_runs(run_name="trace-generation-time-condition"):
-    import wandb
-    import pandas as pd
-
-    api = wandb.Api()
-
-    runs = api.runs(run_name)
-
-    summary_list, config_list, name_list = [], [], []
-    for run in runs:
-        # .summary contains the output keys/values for metrics like accuracy.
-        #  We call ._json_dict to omit large files
-        summary_list.append(run.summary._json_dict)
-
-        # .config contains the hyperparameters.
-        #  We remove special values that start with _.
-        config_list.append(
-            {k: v for k, v in run.config.items() if not k.startswith("_")}
+def get_vocabs(log, categorical_features=None):
+    if categorical_features is None:
+        exclude_cols = ["case_id", "time", "remaining_time", "type_set", "target"]
+        categorical_features = log.select_dtypes(include=["object"]).columns.difference(
+            exclude_cols
         )
-
-        # .name is the human-readable name of the run.
-        name_list.append(run.name)
-
-    summary = pd.DataFrame(summary_list, index=range(len(runs)))
-    configs = pd.DataFrame(config_list, index=range(len(runs)))
-    names = pd.DataFrame(name_list, index=range(len(runs)), columns=["run_name"])
-    df = pd.concat((names, summary, configs), axis=1)
-    return df
+    vocabs = dict()
+    for f in categorical_features:
+        stoi = {v: k for k, v in enumerate(log.loc[:, f].unique())}
+        vocabs[f] = {
+            "stoi": stoi,
+            "size": len(stoi),
+            "emb_dim": int(len(stoi) ** (1 / 2))
+            if int(len(stoi) ** (1 / 2)) > 2
+            else 2,
+        }
+    return vocabs
 
 
 def read_data(path, format_cols=False):
@@ -139,31 +128,42 @@ def read_data(path, format_cols=False):
     return df
 
 
-def get_runs(run_name="trace-generation-time-condition"):
+def get_runs(
+    project="multi-task-trace-time",
+    best_epoch=True,
+    best_metric="test_loss",
+):
     import wandb
     import pandas as pd
 
     api = wandb.Api()
+    runs = api.runs(project)
 
-    runs = api.runs(run_name)
+    cols = None
+    results = pd.DataFrame()
+    for r in runs:
+        if r.state != "finished":
+            continue
 
-    summary_list, config_list, name_list = [], [], []
-    for run in runs:
-        # .summary contains the output keys/values for metrics like accuracy.
-        #  We call ._json_dict to omit large files
-        summary_list.append(run.summary._json_dict)
+        hist = r.history()
+        if cols is None:
+            cols = [
+                c
+                for c in r.history().columns
+                if not c.startswith("param") and not c.startswith("grad")
+            ]
 
-        # .config contains the hyperparameters.
-        #  We remove special values that start with _.
-        config_list.append(
-            {k: v for k, v in run.config.items() if not k.startswith("_")}
-        )
+        hist = hist[cols]
+        hist["run_name"] = r.name
+        if best_epoch:
+            if "loss" in best_metric:
+                best_step = hist[best_metric].idxmin()
+            else:
+                best_step = hist[best_metric].idxmax()
+            hist = hist.loc[hist._step == best_step, cols]
+            hist = hist.join(pd.DataFrame([r.config], index=[best_step]))
 
-        # .name is the human-readable name of the run.
-        name_list.append(run.name)
+        results = pd.concat((results, hist.iloc[[-1], :]))
 
-    summary = pd.DataFrame(summary_list, index=range(len(runs)))
-    configs = pd.DataFrame(config_list, index=range(len(runs)))
-    names = pd.DataFrame(name_list, index=range(len(runs)), columns=["run_name"])
-    df = pd.concat((names, summary, configs), axis=1)
-    return df
+    results.reset_index(inplace=True, drop=True)
+    return results

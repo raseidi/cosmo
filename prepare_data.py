@@ -19,12 +19,6 @@ def get_args_parser(add_help=True):
         help="Path for benchmarked datasets (Weytjens and Weerdt, 2022)",
     )
     parser.add_argument(
-        "--condition",
-        default="trace_time",
-        type=str,
-        help="Condition for labeling cases.",
-    )
-    parser.add_argument(
         "--dataset",
         default="RequestForPayment",
         type=str,
@@ -53,6 +47,47 @@ def create_features(df):
     return df
 
 
+def preprocess(df):
+    """Preprocessing event logs
+
+    1. Exclude cases with len(trace) < 3
+    2. Exclude unfrequent variants
+    3. Fill nans of numerical values with mean from case_id
+    4. Fill nans of categorical values with most frequent from case_id (ToDo)
+
+    Args:
+        df (pd.DataFrame): Event log
+
+    Returns:
+        pd.DataFrame: Preprocessed event log
+    """
+
+    def drop_unfrequent(df, attribute="case_id", threshold=3):
+        ix = df[attribute].value_counts() >= threshold
+        ix = ix[ix == True].index
+        df = df[df[attribute].isin(ix)]
+        return df
+
+    df = drop_unfrequent(df, attribute="case_id")
+    df = pp.label_variants(df)
+    df = drop_unfrequent(df, attribute="variant")
+    exclude_cols = ["case_id", "time", "remaining_time", "type_set", "target"]
+    numerical = df.select_dtypes(include=["number"]).columns.difference(exclude_cols)
+
+    # filling missing values
+    df.reset_index(inplace=True, drop=True)
+    for n in numerical:
+        if df[n].isna().sum():
+            df.loc[:, n] = df.groupby("case_id")[n].transform(
+                lambda x: x.fillna(x.mean())
+            )
+        if (
+            df[n].isna().sum()
+        ):  # if the whole trace doesn't have resource, the nan won't be filled at the previous step
+            df.loc[:, n] = df.loc[:, n].fillna(lambda x: x.mean())
+    return df
+
+
 def clean_directory(path):
     import shutil
 
@@ -68,7 +103,9 @@ def log_exists(args):
     output_path = os.path.join("data", args.dataset)
     ensure_dir(output_path)
     if args.overwrite:
+        print("[!] Overwriting")
         clean_directory(output_path)
+        ensure_dir(output_path)
         return False
     else:
         return os.path.exists(os.path.join(output_path, "log.csv"))
@@ -86,11 +123,14 @@ if __name__ == "__main__":
         test["type_set"] = "test"
         df = pd.concat((train, test))
         df = create_features(df)
+        df = preprocess(df)
+        if df.isna().sum().any():
+            print("-" * 80)
     else:
         df = pd.read_csv(os.path.join(output, "log.csv"))
 
-    if args.condition in df.columns:
-        pass
-    else:
-        df[args.condition] = LABEL_FUNCTION[args.condition](df)
-        df.to_csv(os.path.join(output, "log.csv"), index=False)
+    for condition in LABEL_FUNCTION:
+        if condition not in df.columns:
+            df[condition] = LABEL_FUNCTION[condition](df)
+
+    df.to_csv(os.path.join(output, "log.csv"), index=False)

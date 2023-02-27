@@ -7,9 +7,9 @@ from torch.optim.lr_scheduler import MultiStepLR
 
 from generator.meld import vectorize_log, prepare_log
 from generator.data_loader import get_loader
-from generator.models import MTCondLSTM
+from generator import MTCondLSTM
 from generator.training import train
-from generator.utils import get_runs, read_data
+from generator.utils import get_runs, get_vocabs, read_data
 
 
 def get_args_parser(add_help=True):
@@ -42,20 +42,6 @@ def get_args_parser(add_help=True):
     return parser
 
 
-def get_vocabs(log, features=["activity", "resource"]):
-    vocabs = dict()
-    for f in features:
-        stoi = {v: k for k, v in enumerate(log.loc[:, f].unique())}
-        vocabs[f] = {
-            "stoi": stoi,
-            "size": len(stoi),
-            "emb_dim": int(len(stoi) ** (1 / 2))
-            if int(len(stoi) ** (1 / 2)) > 2
-            else 2,
-        }
-    return vocabs
-
-
 def main(config=None):
     params = get_args_parser().parse_args()
     if params.device == "cuda":
@@ -68,15 +54,21 @@ def main(config=None):
             "dataset": params.dataset,
             "condition": params.condition,
             "device": device.type,
+            "lr": 1e-5,
+            "batch_size": 64,
+            "weight_decay": 0.01,
+            "epochs": 50,
+            "optimizer": "adam",
         }
     )
     config = logger.config
     log = read_data(f"data/{params.dataset}/log.csv")
     log["target"] = log[params.condition]
-    log.drop(["trace_time", "resource_usage"], axis=1, inplace=True)
+    log.drop(["trace_time", "resource_usage", "variant"], axis=1, inplace=True)
     log = prepare_log(log)
     vocabs = get_vocabs(log)
     # encoding
+
     for f in vocabs:
         log.loc[:, f] = log.loc[:, f].transform(lambda x: vocabs[f]["stoi"][x])
 
@@ -99,6 +91,7 @@ def main(config=None):
     model.to(device)
     wandb.watch(model, log="all")
     # X, y = next(iter(train_loader))
+    # X = [x.to(device) for x in X]
     # model(X)
 
     criterion = {"clf": nn.CrossEntropyLoss(), "reg": nn.MSELoss()}
@@ -114,7 +107,7 @@ def main(config=None):
             model.parameters(), lr=config.lr, weight_decay=config.weight_decay
         )
     sc = MultiStepLR(optm, milestones=[25, 35], gamma=0.1)
-
+    pprint.pprint(config)
     train(
         model=model,
         train_loader=train_loader,
@@ -126,19 +119,30 @@ def main(config=None):
     )
     logger.finish()
 
+
 if __name__ == "__main__":
+    datasets = [
+        "bpi_challenge_2013_incidents",
+        "BPI_Challenge_2012_W_Complete",
+        "BPI_Challenge_2012_Complete",
+        "BPI_Challenge_2012_W",
+        "BPI_Challenge_2012",
+    ]
+
     params = get_args_parser().parse_args()
-    sweep_config = {
-        "method": "bayes",
-        "name": params.dataset,
-        "metric": {"name": "test_loss", "goal": "minimize"},
-        "parameters": {
-            "optimizer": {"values": ["adam", "sgd"]},
-            "lr": {"max": 1e-3, "min": 1e-6},
-            "epochs": {"values": [50]},
-            "batch_size": {"values": [64, 256, 512]},
-            "weight_decay": {"values": [0.0, 1e-2, 1e-3]},
-        },
-    }
-    sweep_id = wandb.sweep(sweep_config, project=f"multi-task")
-    wandb.agent(sweep_id, main, count=5)
+    # main()
+    if params.dataset in datasets:
+        sweep_config = {
+            "method": "bayes",
+            "name": f"{params.dataset}-{params.condition}",
+            "metric": {"name": "test_loss", "goal": "minimize"},
+            "parameters": {
+                "optimizer": {"values": ["adam", "sgd"]},
+                "lr": {"max": 1e-3, "min": 1e-6},
+                "epochs": {"values": [50]},
+                "batch_size": {"values": [64, 256, 512]},
+                "weight_decay": {"values": [0.0, 1e-2, 1e-3]},
+            },
+        }
+        sweep_id = wandb.sweep(sweep_config, project="multi-task")
+        wandb.agent(sweep_id, main, count=10)

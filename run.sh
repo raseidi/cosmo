@@ -8,15 +8,14 @@ do
     if [[ $directory == *train_test ]] 
     then
         dataset=$(echo $directory | rev | cut -d "/" -f2 | rev)
-        if [[ $dataset == "PrepaidTravelCost" ]]
+        echo "Running $dataset"
+        if [[ $dataset != "PrepaidTravelCost" && $dataset != "bpi15"  && $dataset != "bpi17" ]]
         then
-            echo $dataset
-        for CO in ${CONDITION[@]}
-        do
-            echo "Running $dataset under condition $CO"
-            # python3.8 prepare_data.py --path $directory --dataset $dataset --condition $CO
-            python3.8 train.py --dataset $dataset --condition $CO --device $DEVICE
-        done
+            # python3.8 prepare_data.py --path $directory --dataset $dataset
+            for CO in ${CONDITION[@]}
+            do
+                python3.8 train.py --dataset $dataset --condition $CO --device $DEVICE
+            done
         fi        
     fi
 done

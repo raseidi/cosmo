@@ -40,3 +40,33 @@ def resource_usage(df):
     )
     df["resource_usage"] = df["resource_usage"].astype(int)
     return df["resource_usage"].values
+
+
+def label_variants(df):
+    # refactor to return variants; maybe this also should change the path
+    if "variant" in df.columns:
+        return df
+
+    from sklearn.preprocessing import LabelEncoder
+
+    variants = df.groupby(["case_id"])["activity"].apply(
+        list
+    )  # transform groupby into list
+    variants = variants.apply(
+        lambda x: ",".join(map(str, x))
+    )  # transform list into a unique string
+    variants = variants.to_frame()  # encode each string (trace)
+    variants.loc[:, "encoded_variants"] = LabelEncoder().fit_transform(
+        variants.values.reshape(
+            -1,
+        )
+    )
+    variants.loc[:, "variant"] = variants["encoded_variants"].apply(
+        lambda x: "Variant " + str(x)
+    )  # formating
+
+    df = df.join(
+        variants.loc[:, ["variant"]],
+        on="case_id",
+    )
+    return df

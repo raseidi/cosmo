@@ -35,37 +35,6 @@ def get_variants(df):
     return sorted(set(variants))
 
 
-def get_results(project="multi-task-trace-time", best_step_run=True):
-    api = wandb.Api()
-    runs = api.runs(project)
-
-    cols = None
-    results = pd.DataFrame()
-    for r in runs:
-        if r.state != "finished":
-            continue
-
-        hist = r.history()
-        if cols is None:
-            cols = [
-                c
-                for c in r.history().columns
-                if not c.startswith("param") and not c.startswith("grad")
-            ]
-
-        hist = hist[cols]
-        hist["run_name"] = r.name
-        if best_step_run:
-            best_step = hist["test_loss"].idxmin()
-            hist = hist.loc[hist._step == best_step, cols]
-            hist = hist.join(pd.DataFrame([r.config], index=[best_step]))
-
-        results = pd.concat((results, hist.iloc[[-1], :]))
-
-    results.reset_index(inplace=True, drop=True)
-    return results
-
-
 # results = get_results()
 # top = results.iloc[results.groupby(["dataset", "condition"]).test_loss.idxmin()]
 

@@ -52,7 +52,10 @@ class MTCondLSTM(nn.Module):
 
     @staticmethod
     def _set_input_dim(vocabs):
-        input_dim = 1  # start with remaining time dim
+        # considering three features only in this work (ac, res, time)
+        # thus, the initial input_dim is 3-(n_categorical_features)
+        # since resource might be numerical or categorical
+        input_dim = 3 - len(vocabs)
         for feature in vocabs:
             input_dim += vocabs[feature]["emb_dim"]
         return input_dim

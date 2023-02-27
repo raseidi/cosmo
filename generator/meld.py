@@ -42,10 +42,13 @@ def prepare_log(log):
     Returns:
         pd.DataFrame: Offsetted event log for managing cases and use ngrams.
     """
+    exclude_cols = ["case_id", "time", "remaining_time", "type_set", "target"]
+    categorical = log.select_dtypes(include=["object"]).columns.difference(exclude_cols)
+
     # adding an ending offset to cases
     end_of_seq = log.drop_duplicates("case_id", keep="last").reset_index(drop=True)
-    end_of_seq.activity = "<eos>"
-    end_of_seq.resource = "<eos>"
+    for c in categorical:
+        end_of_seq.loc[:, c] = "<eos>"
 
     end_of_seq.time += pd.tseries.offsets.Minute()
     log = pd.concat((log, end_of_seq))
@@ -63,7 +66,7 @@ def prepare_log(log):
             "case_id": None,
             "activity": "<pad>",
             "time": pd.NaT,
-            "resource": "<pad>",
+            "resource": "<pad>" if "resource" in categorical else 0,
             "remaining_time": 0,
             "type_set": "<pad>",
             "target": 0,

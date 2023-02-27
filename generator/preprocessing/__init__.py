@@ -5,7 +5,7 @@ from ._feature_engineering import (
     within_day,
     remaining_time,
 )
-from ._conditioning import trace_time, resource_usage
+from ._conditioning import trace_time, resource_usage, label_variants
 
 __all__ = [
     "accumulated_time",
@@ -15,4 +15,5 @@ __all__ = [
     "remaining_time",
     "trace_time",
     "resource_usage",
+    "label_variants",
 ]
