@@ -1,3 +1,4 @@
+import os
 import torch
 import pandas as pd
 
@@ -7,8 +8,18 @@ from generator.meld import prepare_log, vectorize_log
 from generator.simulator.simulator import simulate_remaining_case
 from generator.utils import get_runs, load_checkpoint, get_vocabs, read_data
 
-run_name = "rosy-sweep-9"
-runs = get_runs("multi-task")
+
+if os.path.exists("results/results.csv"):
+    runs = pd.read_csv("results/results.csv")
+else:  # wandb api sometimes takes a while to load everything
+    runs = get_runs("multi-task")
+    runs.to_csv("results/results.csv", index=False)
+
+# w.r.t to loss of the NA
+top_runs_ix = runs.groupby(["dataset", "condition"])["test_loss"].idxmin().values
+df = runs.iloc[top_runs_ix, :]
+
+
 config = runs[runs.run_name == run_name]
 log = read_data(f"data/PrepaidTravelCost/log.csv")
 log["target"] = log["resource_usage"]

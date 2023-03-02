@@ -129,7 +129,7 @@ def read_data(path, format_cols=False):
 
 
 def get_runs(
-    project="multi-task-trace-time",
+    project="multi-task",
     best_epoch=True,
     best_metric="test_loss",
 ):

@@ -5,3 +5,4 @@ notes
 *.pyc
 __pycache__/
 .vscode
+results/

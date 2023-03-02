@@ -9,7 +9,7 @@ do
     then
         dataset=$(echo $directory | rev | cut -d "/" -f2 | rev)
         echo "Running $dataset"
-        if [[ $dataset != "PrepaidTravelCost" && $dataset != "bpi15"  && $dataset != "bpi17" ]]
+        if [[ $dataset != "bpi15" && $dataset != "PrepaidTravelCost" ]]
         then
             # python3.8 prepare_data.py --path $directory --dataset $dataset
             for CO in ${CONDITION[@]}

@@ -1,4 +1,5 @@
-import os, sys
+import os
+import wandb
 import numpy as np
 import pandas as pd
 from generator import preprocessing as pp
@@ -115,7 +116,7 @@ LABEL_FUNCTION = {"trace_time": pp.trace_time, "resource_usage": pp.resource_usa
 if __name__ == "__main__":
     args = get_args_parser().parse_args()
     output = os.path.join("data", args.dataset)
-
+    output_file = os.path.join(output, "log.csv")
     if not log_exists(args):
         train = read_data(os.path.join(args.path, "train.csv"), format_cols=True)
         test = read_data(os.path.join(args.path, "test.csv"), format_cols=True)
@@ -127,10 +128,17 @@ if __name__ == "__main__":
         if df.isna().sum().any():
             print("-" * 80)
     else:
-        df = pd.read_csv(os.path.join(output, "log.csv"))
+        df = pd.read_csv(output_file)
 
     for condition in LABEL_FUNCTION:
         if condition not in df.columns:
             df[condition] = LABEL_FUNCTION[condition](df)
 
-    df.to_csv(os.path.join(output, "log.csv"), index=False)
+    df.to_csv(output_file, index=False)
+
+    run = wandb.init(project="bpm23", job_type="dataset-creation")
+    dataset = wandb.Artifact("RequestForPayment", type="dataset")
+    dataset.add_file("data/RequestForPayment/log.csv")
+    run.log_artifact(dataset)
+
+    wandb.finish()

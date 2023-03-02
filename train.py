@@ -39,6 +39,48 @@ def get_args_parser(add_help=True):
         help="device (Use cuda or cpu Default: cuda)",
     )
 
+    parser.add_argument(
+        "--lr",
+        default="0.0001",
+        type=float,
+        help="Learning rate",
+    )
+
+    parser.add_argument(
+        "--epochs",
+        default="50",
+        type=int,
+        help="Number of epochs",
+    )
+
+    parser.add_argument(
+        "--optimizer",
+        default="adam",
+        type=str,
+        help="Optimizer (adam or sgd)",
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        default=64,
+        type=int,
+        help="Batch size",
+    )
+
+    parser.add_argument(
+        "--weight-decay",
+        default=0,
+        type=float,
+        help="Weight decay",
+    )
+
+    parser.add_argument(
+        "--project-name",
+        default="test",
+        type=str,
+        help="Wandb project name",
+    )
+
     return parser
 
 
@@ -48,17 +90,12 @@ def main(config=None):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # print("Warning; gpu not available") #todo
 
-    logger = wandb.init(config=config)
+    logger = wandb.init(config=config, project=params.project_name)
     logger.config.update(
         {
             "dataset": params.dataset,
             "condition": params.condition,
             "device": device.type,
-            # "lr": 1e-5,
-            # "batch_size": 64,
-            # "weight_decay": 0.01,
-            # "epochs": 50,
-            # "optimizer": "adam",
         }
     )
     config = logger.config
@@ -77,7 +114,7 @@ def main(config=None):
 
     train_loader = get_loader(data_train, batch_size=config.batch_size)
     test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
-        
+
     torch.manual_seed(0)
     model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
 
@@ -87,6 +124,7 @@ def main(config=None):
             m.bias.data.fill_(0.5)
 
     model.apply(init_weights)
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     model.to(device)
     wandb.watch(model, log="all")
@@ -122,17 +160,4 @@ def main(config=None):
 
 if __name__ == "__main__":
     params = get_args_parser().parse_args()
-    sweep_config = {
-        "method": "bayes",
-        "name": f"{params.dataset}-{params.condition}",
-        "metric": {"name": "test_loss", "goal": "minimize"},
-        "parameters": {
-            "optimizer": {"values": ["adam", "sgd"]},
-            "lr": {"max": 1e-3, "min": 1e-6},
-            "epochs": {"values": [50]},
-            "batch_size": {"values": [64, 256, 512]},
-            "weight_decay": {"values": [0.0, 1e-2, 1e-3]},
-        },
-    }
-    sweep_id = wandb.sweep(sweep_config, project="multi-task")
-    wandb.agent(sweep_id, main, count=10)
+    main(params)
