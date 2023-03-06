@@ -84,20 +84,21 @@ def get_args_parser(add_help=True):
     return parser
 
 
-def main(config=None):
-    params = get_args_parser().parse_args()
+def main(params=None):
+    # params = get_args_parser().parse_args()
     if params.device == "cuda":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # print("Warning; gpu not available") #todo
 
-    logger = wandb.init(config=config, project=params.project_name)
-    logger.config.update(
-        {
-            "dataset": params.dataset,
-            "condition": params.condition,
-            "device": device.type,
-        }
-    )
+    logger = wandb.init(config=params, project=params.project_name)
+    # todo: how to diff sweep from single/manual run
+    # logger.config.update(
+    #     {
+    #         "dataset": params.dataset,
+    #         "condition": params.condition,
+    #         "device": device.type,
+    #     },
+    # )
     config = logger.config
     log = read_data(f"data/{params.dataset}/log.csv")
     log["target"] = log[params.condition]
@@ -132,7 +133,11 @@ def main(config=None):
     # X = [x.to(device) for x in X]
     # model(X)
 
-    criterion = {"clf": nn.CrossEntropyLoss(), "reg": nn.MSELoss()}
+    if "resource" in vocabs:
+        res_loss = nn.CrossEntropyLoss()
+    else:
+        res_loss = nn.MSELoss()
+    criterion = {"clf": nn.CrossEntropyLoss(), "res": res_loss, "reg": nn.MSELoss()}
     if config.optimizer == "sgd":
         optm = torch.optim.SGD(
             model.parameters(),

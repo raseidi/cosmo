@@ -36,6 +36,11 @@ class MTCondLSTM(nn.Module):
 
         self.act_out = nn.Linear(256, self.vocabs["activity"]["size"])
         self.rt_out = nn.Linear(256, 1)
+        if "resource" in vocabs: # if categorical or numerical
+            res_out = self.vocabs["resource"]["size"]
+        else:
+            res_out = 1
+        self.res_out = nn.Linear(256, res_out)
 
     def _set_embeddings(self, vocabs):
         for feature in vocabs:
@@ -76,22 +81,24 @@ class MTCondLSTM(nn.Module):
 
         return torch.cat((embs, e[:, :, ix + 1 :]), dim=2)
 
-    def forward(self, x):
+    def forward(self, x, states=None):
         # x[0].shape=(batch_size, prefix_len, 3)
         # where 0=activity, 1=resource, 2=remaining time
         events, condition = x
         events = self._embed(events)
 
         # ToDo: at test time, retrain best models and return the states here for simulation
-        encoded, _ = self.lstm(events)
+        encoded, states = self.lstm(events, states)
         encoded = encoded.flatten(1)
         conditioned = torch.cat((encoded, condition.view(-1, 1)), dim=1)
         out = self.mlp(conditioned)
 
+        next_res = self.res_out(out)
         next_act = self.act_out(out)
         next_rt = self.rt_out(out)
 
-        return next_act, next_rt
+        states = [s.detach() for s in states]
+        return next_act, next_res, next_rt, states
 
 
 # class DeepGeneratorCategorical(nn.Module):

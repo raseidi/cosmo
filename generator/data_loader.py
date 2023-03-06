@@ -20,7 +20,8 @@ class EventLog(Dataset):
             ),
             (
                 self.events[self.ngram_indexes[index + 1]][-1, 0],  # next act
-                self.events[self.ngram_indexes[index + 1]][-1, -1],  # next rt
+                self.events[self.ngram_indexes[index + 1]][-1, 1],  # next res
+                self.events[self.ngram_indexes[index + 1]][-1, 2],  # next rt
             ),
         )
 

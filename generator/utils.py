@@ -154,13 +154,13 @@ def get_runs(
             ]
 
         hist = hist[cols]
-        hist["run_name"] = r.name
+        hist.loc[:, "run_name"] = r.name
         if best_epoch:
             if "loss" in best_metric:
                 best_step = hist[best_metric].idxmin()
             else:
                 best_step = hist[best_metric].idxmax()
-            hist = hist.loc[hist._step == best_step, cols]
+            hist = hist.loc[hist._step == best_step, :]
             hist = hist.join(pd.DataFrame([r.config], index=[best_step]))
 
         results = pd.concat((results, hist.iloc[[-1], :]))

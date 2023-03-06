@@ -4,23 +4,25 @@ from .utils import save_checkpoint, ensure_dir
 
 
 def train_step(
-    model, data_loader, criterion_clf, criterion_rt, device, optimizer, sc=None
+    model, data_loader, criterion_clf, criterion_res, criterion_rt, device, optimizer, sc=None
 ):
     model.train()
-    loss_rt, loss_clf, correct = 0, 0, 0
+    loss_rt, loss_res, loss_clf, correct = 0, 0, 0, 0
     for X, y in data_loader:
         x = [d.to(device) for d in X]
         y = [d.to(device) for d in y]
 
-        na, rt = model(x)
+        na, res, rt, _ = model(x)
 
         l_clf = criterion_clf(na, y[0].long())
-        l_rt = criterion_rt(rt, y[1].unsqueeze(1))
+        l_res = criterion_res(res, y[1].long())
+        l_rt = criterion_rt(rt, y[2].unsqueeze(1))
 
         loss_clf += l_clf.item() * len(X[0])  # reduction=mean
+        loss_res += l_res.item() * len(X[0])  # reduction=mean
         loss_rt += l_rt.item() * len(X[0])
 
-        loss = l_clf + l_rt
+        loss = l_clf + l_res + l_rt
         loss.backward()
         optimizer.step()
         # see https://stackoverflow.com/a/46820512
@@ -32,36 +34,40 @@ def train_step(
         sc.step()
     loss_clf /= len(data_loader.dataset)
     loss_rt /= len(data_loader.dataset)  # test loss is what matters tho
+    loss_res /= len(data_loader.dataset)
     acc = correct / len(data_loader.dataset)
-    return loss_clf, acc, loss_rt
+    return loss_clf, acc, loss_rt, loss_res
 
 
-def eval(model, data_loader, criterion_clf, criterion_rt, device):
+def eval(model, data_loader, criterion_clf, criterion_res, criterion_rt, device):
     model.eval()
-    loss_clf, loss_rt, correct = 0, 0, 0
+    loss_clf, loss_rt, loss_res, correct = 0, 0, 0, 0
     with torch.inference_mode():
         for X, y in data_loader:
             x = [d.to(device) for d in X]
             y = [d.to(device) for d in y]
 
-            na, rt = model(x)
+            na, res, rt, _ = model(x)
 
             # todo: mask pad tokens
             # see https://discuss.pytorch.org/t/ignore-padding-area-in-loss-computation/95804/5
             # no need for masking since we are doing left padding
             l_clf = criterion_clf(na, y[0].long())
-            l_rt = criterion_rt(rt, y[1].unsqueeze(1))
+            l_res = criterion_res(res, y[1].long())
+            l_rt = criterion_rt(rt, y[2].unsqueeze(1))
 
             loss_clf += l_clf.item() * len(X[0])  # reduction=mean
             loss_rt += l_rt.item() * len(X[0])
+            loss_res += l_res.item() * len(X[0])
 
             y_pred_class = torch.argmax(torch.softmax(na, dim=1), dim=1)
             correct += (y_pred_class == y[0]).sum().item()
 
     loss_clf /= len(data_loader.dataset)
     loss_rt /= len(data_loader.dataset)
+    loss_res /= len(data_loader.dataset)
     acc = correct / len(data_loader.dataset)
-    return loss_clf, acc, loss_rt
+    return loss_clf, acc, loss_rt, loss_res
 
 
 def train(
@@ -82,19 +88,21 @@ def train(
     model.to(logger.config.device)
     best_acc = 0
     for epoch in range(logger.config.epochs):
-        train_loss, train_acc, train_loss_rt = train_step(
+        train_loss, train_acc, train_loss_rt, train_loss_res = train_step(
             model=model,
             data_loader=train_loader,
             criterion_clf=loss_fn["clf"],
+            criterion_res=loss_fn["res"],
             criterion_rt=loss_fn["reg"],
             device=logger.config.device,
             optimizer=optimizer,
             sc=sc,
         )
-        test_loss, test_acc, test_loss_rt = eval(
+        test_loss, test_acc, test_loss_rt, test_loss_res = eval(
             model=model,
             data_loader=test_loader,
             criterion_clf=loss_fn["clf"],
+            criterion_res=loss_fn["res"],
             criterion_rt=loss_fn["reg"],
             device=logger.config.device,
         )
@@ -109,7 +117,9 @@ def train(
             f"train_acc: {train_acc:.4f} | "
             f"test_acc: {test_acc:.4f} | "
             f"train_loss_rt: {train_loss_rt:.4f} days| "  # outcome is in log secs
-            f"test_loss_rt: {test_loss_rt:.4f} days| "
+            f"test_loss_rt: {test_loss_rt:.4f} days| ",
+            f"train_loss_res: {train_loss_res:.4f}",
+            f"test_loss_res: {test_loss_res:.4f}",
         )
 
         if logger:
@@ -121,6 +131,8 @@ def train(
                     "test_loss": test_loss,
                     "test_acc": test_acc,
                     "test_loss_rt(days)": test_loss_rt,
+                    "train_loss_res": train_loss_res,
+                    "test_loss_res": test_loss_res,
                 }
             )
         is_best = test_acc > best_acc

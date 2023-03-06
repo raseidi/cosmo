@@ -4,28 +4,35 @@ import pandas as pd
 import torch.nn.functional as F
 
 
-def simulate_from_scratch(model, meta, n_traces=100, device="cuda"):
+def simulate_from_scratch(model, vocabs, n_traces=100, max_len=100, device="cuda"):
     _sim = pd.DataFrame()
-    g = torch.Generator().manual_seed(2147483647)  # for reproducibility
+    g = torch.Generator().manual_seed(13)  # for reproducibility
     for c in [0, 1]:
-        cond = torch.tensor([[c]])
+        cond = torch.tensor([c])
         sim, rt_sim = [], []
         with torch.inference_mode():
             for _ in range(n_traces):
                 na_trace = [0, 0, 0, 0, 0]
+                res_trace = [0, 0, 0, 0, 0]
                 rt_trace = [0, 0, 0, 0, 0]
-                for _ in range(100):  # max prefix len == 100
+                states = None
+                for _ in range(max_len):  # max trace len
                     na_prefix = torch.tensor([na_trace[-5:]])
+                    res_type = torch.long if "resource" in vocabs else torch.float
+                    res_prefix = torch.tensor([res_trace[-5:]], dtype=res_type)
                     rt_prefix = torch.tensor([rt_trace[-5:]], dtype=torch.float)
 
-                    x = [na_prefix.to(device), rt_prefix.to(device), cond.to(device)]
-                    na, rt = model(x)
+                    x = torch.cat((na_prefix, res_prefix, rt_prefix))
+                    x = x.transpose(0, 1).unsqueeze(0)
+                    x = [x.to(device), cond.to(device)]
+                    na, rt, states = model(x, states)
                     probs = F.softmax(na, dim=1)
                     ix = torch.multinomial(
                         probs.cpu(), num_samples=1, generator=g
                     ).item()
+                    (probs*100).cpu().detach().round()
                     # ix = torch.argmax(torch.softmax(na.cpu(), dim=1), dim=1).item()
-                    if ix == 0:
+                    if ix == vocabs["activity"]["stoi"]["<eos>"]:
                         break
                     na_trace.append(ix)
                     rt_trace.append(rt.item())
@@ -40,12 +47,15 @@ def simulate_from_scratch(model, meta, n_traces=100, device="cuda"):
             .drop("level_1", axis=1)
             .rename(columns={"level_0": "case_id", 0: "activity"})
         )
-        sim["remaining_time"] = [np.exp(item) for sublist in rt_sim for item in sublist]
+        sim["remaining_time"] = [np.exp(item)/ (24 * 60 * 60) for sublist in rt_sim for item in sublist]
 
-        meta_dict = dict(zip(meta.encoded.values, meta.activities.values))
-        sim["activity"] = sim["activity"].apply(lambda x: meta_dict[x])
+        # meta_dict = dict(zip(meta.encoded.values, meta.activities.values))
+        # sim["activity"] = sim["activity"].apply(lambda x: vocabs["activity"][x])
 
-        sim = sim[sim["activity"] != "<.>"]
+        sim = sim[
+            (sim["activity"] != vocabs["activity"]["stoi"]["<pad>"])
+            & (sim["activity"] != vocabs["activity"]["stoi"]["<eos>"])
+        ]
         sim["condition"] = c
         _sim = pd.concat((_sim, sim))
     return _sim
