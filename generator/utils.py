@@ -146,6 +146,8 @@ def get_runs(
             continue
 
         hist = r.history()
+        if hist.empty:
+            continue
         if cols is None:
             cols = [
                 c

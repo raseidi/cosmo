@@ -36,7 +36,7 @@ class MTCondLSTM(nn.Module):
 
         self.act_out = nn.Linear(256, self.vocabs["activity"]["size"])
         self.rt_out = nn.Linear(256, 1)
-        if "resource" in vocabs: # if categorical or numerical
+        if "resource" in vocabs:  # if categorical or numerical
             res_out = self.vocabs["resource"]["size"]
         else:
             res_out = 1

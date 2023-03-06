@@ -30,7 +30,7 @@ def simulate_from_scratch(model, vocabs, n_traces=100, max_len=100, device="cuda
                     ix = torch.multinomial(
                         probs.cpu(), num_samples=1, generator=g
                     ).item()
-                    (probs*100).cpu().detach().round()
+                    (probs * 100).cpu().detach().round()
                     # ix = torch.argmax(torch.softmax(na.cpu(), dim=1), dim=1).item()
                     if ix == vocabs["activity"]["stoi"]["<eos>"]:
                         break
@@ -47,7 +47,9 @@ def simulate_from_scratch(model, vocabs, n_traces=100, max_len=100, device="cuda
             .drop("level_1", axis=1)
             .rename(columns={"level_0": "case_id", 0: "activity"})
         )
-        sim["remaining_time"] = [np.exp(item)/ (24 * 60 * 60) for sublist in rt_sim for item in sublist]
+        sim["remaining_time"] = [
+            np.exp(item) / (24 * 60 * 60) for sublist in rt_sim for item in sublist
+        ]
 
         # meta_dict = dict(zip(meta.encoded.values, meta.activities.values))
         # sim["activity"] = sim["activity"].apply(lambda x: vocabs["activity"][x])

@@ -36,7 +36,7 @@ def get_best_run(dataset: str, condition: str, metric="test_loss"):
     top_runs_ix = runs.groupby(["dataset", "condition"])[metric].idxmin().values
     df = runs.iloc[top_runs_ix, :]
     res = best_to_dict(df, dataset, condition)
-    res.pop('run_name', None)
+    res.pop("run_name", None)
     return res
 
 
@@ -62,7 +62,8 @@ for dataset, condition in prods:
     if (
         bpm_results is None
         or bpm_results[
-            (bpm_results["dataset"] == dataset) & (bpm_results["condition"] == condition)
+            (bpm_results["dataset"] == dataset)
+            & (bpm_results["condition"] == condition)
         ].empty
     ):
         runs = read_tuning_results()

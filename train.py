@@ -110,6 +110,16 @@ def main(params=None):
     for f in vocabs:
         log.loc[:, f] = log.loc[:, f].transform(lambda x: vocabs[f]["stoi"][x])
 
+    if "resource" not in vocabs:  # i.e. resource is numerical
+        # z score normalization for numerical resource
+        if params.condition == "resource_usage":
+            # the res usage condition makes no sense for numerical resource
+            logger.finish()
+            return
+        mean = log.loc[log.type_set == "train", "resource"].mean()
+        std = log.loc[log.type_set == "train", "resource"].std()
+        log.loc[:, "resource"] = (log.loc[:, "resource"] - mean) / std
+
     # ToDo how to track cat features? here we have (act, res, rt)
     data_train, data_test = vectorize_log(log)
 
