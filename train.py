@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 
 from generator.meld import vectorize_log, prepare_log
 from generator.data_loader import get_loader
-from generator import MTCondLSTM
+from generator import MTCondLSTM, MTCondDG
 from generator.training import train
 from generator.utils import get_runs, get_vocabs, read_data
 
@@ -127,7 +127,8 @@ def main(params=None):
     test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
 
     torch.manual_seed(0)
-    model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
+    # model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
+    model = MTCondDG(vocabs=vocabs, batch_size=config.batch_size)
 
     def init_weights(m):
         if isinstance(m, nn.Linear):

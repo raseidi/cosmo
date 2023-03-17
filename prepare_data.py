@@ -44,7 +44,7 @@ def create_features(df):
         df.loc[:, ["remaining_time"]]
         .apply(lambda x: x.dt.total_seconds())
         .apply(np.log1p)
-    )  # / (24 * 60 * 60) # remaining time in days
+    )
     return df
 
 
