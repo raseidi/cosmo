@@ -203,8 +203,8 @@ class MTCondDG(nn.Module):
         encoded, states = self.lstm(events, states)
         states = [s.detach() for s in states]
 
-        next_res, _ = self.activity_block(encoded, states, condition)
-        next_act, _ = self.res_block(encoded, states, condition)
+        next_act, _ = self.activity_block(encoded, states, condition)
+        next_res, _ = self.res_block(encoded, states, condition)
         next_rt, _ = self.time_block(encoded, states, condition)
 
         return next_act, next_res, next_rt, states

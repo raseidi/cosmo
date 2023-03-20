@@ -6,3 +6,4 @@ notes
 __pycache__/
 .vscode
 results/
+playground.py

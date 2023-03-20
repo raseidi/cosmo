@@ -4,7 +4,7 @@ import pandas as pd
 from itertools import product
 from argparse import Namespace
 
-from generator import MTCondLSTM
+from generator import MTCondLSTM, MTCondDG
 from generator.data_loader import get_loader
 from generator.meld import prepare_log, vectorize_log
 from generator.simulator.simulator import simulate_from_scratch, simulate_remaining_case
@@ -105,12 +105,14 @@ ignore_datasets = [
 # dataset = "bpi19"
 # condition = "resource_usage"
 # model = "baseline"
-model = "DG"
+model_arc = "DG"
 for dataset, condition in prods:
+    # if dataset in ["bpi19", "bpi17"]:
+    #     continue
+    # dataset="RequestForPayment"
     if dataset in ignore_datasets and condition == "resource_usage":
         continue
-    dataset = "RequestForPayment"
-    ensure_model(dataset=dataset, condition=condition, model=model)
+    ensure_model(dataset=dataset, condition=condition, model=model_arc)
 
     bpm_results = pd.read_csv(os.path.join("results", "best_runs.csv"))
     params = best_to_dict(bpm_results, dataset, condition)
@@ -146,7 +148,7 @@ for dataset, condition in prods:
     # no need to load train loader here
     _, data_test = vectorize_log(log)
     test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
-    model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
+    model = MTCondDG(vocabs=vocabs, batch_size=params.batch_size)
     checkpoint = load_checkpoint(
         ckpt_dir_or_file=f"models/{params.dataset}/{params.condition}/{params.run_name}/best_model.ckpt"
     )
@@ -182,7 +184,7 @@ for dataset, condition in prods:
     #     )
 
     if not os.path.exists(
-        f"results/simulations/{params.dataset}_{params.condition}_on_going.csv"
+        f"results/simulations/{params.dataset}_{params.condition}{model_arc}_on_going.csv"
     ):
         on_going = simulate_remaining_case(model, log[log.type_set == "test"])
         on_going.activity = on_going.activity.apply(lambda x: itos[x])
@@ -193,7 +195,6 @@ for dataset, condition in prods:
             on_going.resource = on_going.resource.apply(lambda x: ritos[x])
 
         on_going.to_csv(
-            f"results/simulations/{params.dataset}_{params.condition}_{model}_on_going.csv",
+            f"results/simulations/{params.dataset}_{params.condition}{model_arc}_on_going.csv",
             index=False,
         )
-    break

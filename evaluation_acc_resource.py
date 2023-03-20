@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from itertools import product
 from argparse import Namespace
-from generator import MTCondLSTM
+from generator import MTCondLSTM, MTCondDG
 from generator.data_loader import get_loader
 from generator.meld import prepare_log, vectorize_log
 from generator.utils import get_runs, load_checkpoint, get_vocabs, read_data
@@ -49,8 +49,8 @@ def next_evt_pred(model, test_loader, device="cuda"):
     }
 
 
-def best_to_dict(df, dataset, condition):
-    res = df[(df.dataset == dataset) & (df.condition == condition)].iloc[0, :].to_dict()
+def best_to_dict(df, dataset, condition, model="DG"):
+    res = df[(df.dataset == dataset) & (df.condition == condition) & (df.model == model)].iloc[0, :].to_dict()
     res = {
         key: value
         for key, value in res.items()
@@ -66,20 +66,24 @@ if __name__ == "__main__":
         "dataset"
     ].unique()
     conditions = ["resource_usage"]
+    models = ["DG"]
     ignore_datasets = [
         "BPI_Challenge_2012_W",
         "BPI_Challenge_2012_Complete",
+        "BPI_Challenge_2012_W_Complete",
         "BPI_Challenge_2012_A",
         "BPI_Challenge_2012_O",
         "BPI_Challenge_2012",
     ]
-    final = pd.DataFrame()
-    prods = product(datasets, conditions)
-    for dataset, condition in prods:
+    final = pd.read_csv("results/predictions.csv")
+    prods = product(datasets, conditions, models)
+    for dataset, condition, model_arc in prods:
         if dataset in ignore_datasets and condition == "resource_usage":
             continue
         bpm_results = pd.read_csv(os.path.join("results", "best_runs.csv"))
-        params = best_to_dict(bpm_results, dataset, condition)
+        params = best_to_dict(bpm_results, dataset, condition, model_arc)
+        if params is None:
+            print(dataset, condition, model_arc, "Not found")
         params = Namespace(**params)
         # print(params)
         # params = Namespace(
@@ -112,7 +116,11 @@ if __name__ == "__main__":
         # no need to load train loader here
         _, data_test = vectorize_log(log)
         test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
-        model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
+        if model_arc == "":
+            model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
+        elif model_arc == "DG":
+            model = MTCondDG(vocabs=vocabs, batch_size=params.batch_size)
+        
         checkpoint = load_checkpoint(
             ckpt_dir_or_file=f"models/{params.dataset}/{params.condition}/{params.run_name}/best_model.ckpt"
         )
@@ -123,5 +131,6 @@ if __name__ == "__main__":
         preds = pd.DataFrame(preds)
         preds["dataset"] = dataset
         preds["condition"] = condition
+        preds["model"] = model_arc
         final = pd.concat((final, preds))
         final.to_csv("results/predictions.csv", index=False)

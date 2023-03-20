@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 from pm4py import discover_petri_net_heuristics as heuristics
 from pm4py import discover_petri_net_inductive as inductive_miner
 from pm4py import fitness_token_based_replay as fitness_token_replay
-from pm4py import fitness_alignments
+# from pm4py import fitness_alignments
+from pm4py.conformance import fitness_alignments
 
 from itertools import product
 from sklearn.preprocessing import LabelEncoder
@@ -141,7 +142,7 @@ def trace_time_boxplot(log, sim, dataset, condition):
     plt.close()
 
 
-def positioning_resource_scores(log, sim, most_freq_res, constraint="resource_usage"):
+def positioning_resource_scores(log, sim, most_freq_res, model_arc, constraint="resource_usage"):
     position_scores = {}
     for case in log[log.type_set == "test"].case_id.unique():
         trace = log[log.case_id == case].reset_index(drop=True)
@@ -200,12 +201,12 @@ def positioning_resource_scores(log, sim, most_freq_res, constraint="resource_us
         value_name="accuracy",
     )
     final.to_csv(
-        f"results/datasets/resource_usage/{dataset}_positioning_accuracy.csv",
+        f"results/datasets/resource_usage/{dataset}{model_arc}_positioning_accuracy.csv",
         index=False,
     )
     plt.figure()
     sns.lineplot(x="pos", y="accuracy", hue="resource_usage", data=final)
-    plt.savefig(f"results/plots/{dataset}_{constraint}.png")
+    plt.savefig(f"results/plots/{dataset}_{constraint}{model_arc}.png")
     plt.close()
 
 
@@ -259,9 +260,11 @@ if __name__ == "__main__":
         "BPI_Challenge_2012",
         "BPI_Challenge_2012_W_Complete",
     ]
-    prods = product(datasets, sym_types, conditions)
+    models = ["DG"]
+    prods = product(datasets, sym_types, conditions, models)
 
-    for dataset, sim_type, condition in prods:
+    for dataset, sim_type, condition, model_arc in prods:
+        # dataset = "RequestForPayment"
         # condition = "resource_usage"
         # sim_type = "on_going"
         # if os.path.exists(f"results/plots/{dataset}_{condition}.png"):
@@ -281,7 +284,7 @@ if __name__ == "__main__":
             print(os.path.join("data", dataset, "log.csv"), "Doest not exist.")
             continue
 
-        scores = dict(dataset=dataset, sim_type=sim_type, condition=condition)
+        scores = dict(dataset=dataset, sim_type=sim_type, condition=condition, model=model_arc)
         accumulated_scores = dict()
 
         """ reading and preprocessing data """
@@ -303,7 +306,7 @@ if __name__ == "__main__":
                 continue
 
         sim_data = os.path.join(
-            sim_path, "_".join([dataset, condition, sim_type]) + ".csv"
+            sim_path, "_".join([dataset, condition+model_arc, sim_type]) + ".csv"
         )
         if not os.path.exists(sim_data):
             print("simulated log doesnt exist")
@@ -362,6 +365,7 @@ if __name__ == "__main__":
         accumulated_scores["dataset"] = dataset
         accumulated_scores["condition"] = condition
         accumulated_scores["sim_type"] = sim_type
+        accumulated_scores["model"] = model_arc
 
         """ Process model """
         print("[+] PM FITNESS")
@@ -378,26 +382,32 @@ if __name__ == "__main__":
         }
 
         # fit = fitness_token_replay(log[log.type_set == "train"], **fitness_config)
-        # for some unkown reason the pm4py multiplies this key by 100
-        # and duplicates it
+        # # for some unkown reason the pm4py multiplies this key by 100
+        # # and duplicates it
+        # # update: multiplies by 100 cause it is the percentage, not
+        # # the fitness score itself
         # fit["perc_fit_traces"] /= 100
         # _ = fit.pop("percentage_of_fitting_traces")
         # fit = {"gr_tr_" + k: v for k, v in fit.items()}
         # scores.update(fit)
 
-        # fit = fitness_token_replay(from_scratch, **fitness_config)
-        # fit["perc_fit_traces"] /= 100
-        # _ = fit.pop("percentage_of_fitting_traces")
-        # fit = {"sim_tr_" + k: v for k, v in fit.items()}
-        # scores.update(fit)
+        fit = fitness_token_replay(from_scratch, **fitness_config)
+        fit["perc_fit_traces"] /= 100
+        _ = fit.pop("percentage_of_fitting_traces")
+        fit = {"sim_tr_" + k: v for k, v in fit.items()}
+        scores.update(fit)
 
         # fit = fitness_alignments(log=log, multi_processing=True, **fitness_config)
         # fit = {"gr_al_" + k: v for k, v in fit.items()}
         # scores.update(fit)
 
-        fit = fitness_alignments(from_scratch, multi_processing=True, **fitness_config)
-        fit = {"sim_al_" + k: v for k, v in fit.items()}
-        scores.update(fit)
+        # sizes = from_scratch.groupby("case_id").size()
+        # sizes = sizes[sizes < 50]
+        # small_log = from_scratch[from_scratch.case_id.isin(sizes.index)]
+        
+        # fit = fitness_alignments(small_log, multi_processing=True, **fitness_config)
+        # fit = {"sim_al_" + k: v for k, v in fit.items()}
+        # scores.update(fit)
 
         # ToDo: drop variants of len > 20 for better computational performance
         # cases = log.groupby("variant").case_id.first()
@@ -406,31 +416,32 @@ if __name__ == "__main__":
         # plt.show()
 
         final_scores = pd.concat((final_scores, pd.DataFrame([scores])))
+        final_scores.to_csv("results/sim_evaluation_v2.csv", index=False)
         final_accumulated_scores = pd.concat(
             (final_accumulated_scores, accumulated_scores)
         )
-        final_accumulated_scores.to_csv("results/sim_evaluation_accum.csv", index=False)
-        final_scores.to_csv("results/sim_evaluation.csv", index=False)
+        final_accumulated_scores.to_csv("results/sim_evaluation_accum_v2.csv", index=False)
         """ what-if analysis """
         print("[+] WHAT-IF ANALYSIS")
-        # if condition == "trace_time":
-        #     a = (
-        #         log[log.type_set == "test"]
-        #         .drop_duplicates("case_id")
-        #         .reset_index(drop=True)
-        #     )
-        #     b = (
-        #         from_scratch[from_scratch.type_set.isna()]
-        #         .drop_duplicates("case_id")
-        #         .reset_index(drop=True)
-        #     )
-        #     b["type_set"] = "sim"
+        if condition == "trace_time":
+            a = (
+                log[log.type_set == "test"]
+                .drop_duplicates("case_id")
+                .reset_index(drop=True)
+            )
+            b = (
+                from_scratch[from_scratch.type_set.isna()]
+                .drop_duplicates("case_id")
+                .reset_index(drop=True)
+            )
+            b["type_set"] = "sim"
 
-        #     trace_time_boxplot(
-        #         log=a,
-        #         sim=b,
-        #         dataset=dataset,
-        #         condition=condition,
-        #     )
-        # elif condition == "resource_usage":
-        #     positioning_resource_scores(log, sim, most_freq_res)
+            trace_time_boxplot(
+                log=a,
+                sim=b,
+                dataset=dataset,
+                condition=condition,
+            )
+        elif condition == "resource_usage":
+            if model_arc == "DG":
+                positioning_resource_scores(log, sim, most_freq_res, model_arc)
