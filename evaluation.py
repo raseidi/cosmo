@@ -244,8 +244,8 @@ if __name__ == "__main__":
     sim_path = "results/simulations"
     log_path = "data/"
     wandb_performances = pd.read_csv("results/best_runs.csv")
-    final_scores = read_sim_scores("results/sim_evaluation.csv")
-    final_accumulated_scores = read_sim_scores("results/sim_evaluation_accum.csv")
+    final_scores = read_sim_scores("results/sim_evaluation_v3.csv")
+    final_accumulated_scores = read_sim_scores("results/sim_evaluation_accum_v3.csv")
 
     datasets = pd.read_csv("results/datasets_statistics.csv").dataset.unique()
     sym_types = ["on_going"]
@@ -264,7 +264,6 @@ if __name__ == "__main__":
     prods = product(datasets, sym_types, conditions, models)
 
     for dataset, sim_type, condition, model_arc in prods:
-        # dataset = "RequestForPayment"
         # condition = "resource_usage"
         # sim_type = "on_going"
         # if os.path.exists(f"results/plots/{dataset}_{condition}.png"):
@@ -286,7 +285,6 @@ if __name__ == "__main__":
 
         scores = dict(dataset=dataset, sim_type=sim_type, condition=condition, model=model_arc)
         accumulated_scores = dict()
-
         """ reading and preprocessing data """
         log = pd.read_csv(os.path.join("data", dataset, "log.csv"))
         log["condition"] = log[condition]
@@ -405,43 +403,38 @@ if __name__ == "__main__":
         # sizes = sizes[sizes < 50]
         # small_log = from_scratch[from_scratch.case_id.isin(sizes.index)]
         
-        # fit = fitness_alignments(small_log, multi_processing=True, **fitness_config)
-        # fit = {"sim_al_" + k: v for k, v in fit.items()}
-        # scores.update(fit)
+        fit = fitness_alignments(from_scratch, multi_processing=True, **fitness_config)
+        fit = {"sim_al_" + k: v for k, v in fit.items()}
+        scores.update(fit)
 
-        # ToDo: drop variants of len > 20 for better computational performance
-        # cases = log.groupby("variant").case_id.first()
-        # log[log.case_id.isin(cases)].groupby("variant").size().sort_values().plot()
-        # sim[sim.case_id.isin(sim.groupby("variant").case_id.first())].groupby("variant").size().sort_values().plot()
-        # plt.show()
-
+        # break
         final_scores = pd.concat((final_scores, pd.DataFrame([scores])))
-        final_scores.to_csv("results/sim_evaluation_v2.csv", index=False)
+        final_scores.to_csv("results/sim_evaluation_v3.csv", index=False)
         final_accumulated_scores = pd.concat(
             (final_accumulated_scores, accumulated_scores)
         )
-        final_accumulated_scores.to_csv("results/sim_evaluation_accum_v2.csv", index=False)
-        """ what-if analysis """
-        print("[+] WHAT-IF ANALYSIS")
-        if condition == "trace_time":
-            a = (
-                log[log.type_set == "test"]
-                .drop_duplicates("case_id")
-                .reset_index(drop=True)
-            )
-            b = (
-                from_scratch[from_scratch.type_set.isna()]
-                .drop_duplicates("case_id")
-                .reset_index(drop=True)
-            )
-            b["type_set"] = "sim"
+        final_accumulated_scores.to_csv("results/sim_evaluation_accum_v3.csv", index=False)
+        # """ what-if analysis """
+        # print("[+] WHAT-IF ANALYSIS")
+        # if condition == "trace_time":
+        #     a = (
+        #         log[log.type_set == "test"]
+        #         .drop_duplicates("case_id")
+        #         .reset_index(drop=True)
+        #     )
+        #     b = (
+        #         from_scratch[from_scratch.type_set.isna()]
+        #         .drop_duplicates("case_id")
+        #         .reset_index(drop=True)
+        #     )
+        #     b["type_set"] = "sim"
 
-            trace_time_boxplot(
-                log=a,
-                sim=b,
-                dataset=dataset,
-                condition=condition,
-            )
-        elif condition == "resource_usage":
-            if model_arc == "DG":
-                positioning_resource_scores(log, sim, most_freq_res, model_arc)
+        #     trace_time_boxplot(
+        #         log=a,
+        #         sim=b,
+        #         dataset=dataset,
+        #         condition=condition,
+        #     )
+        # elif condition == "resource_usage":
+        #     if model_arc == "DG":
+        #         positioning_resource_scores(log, sim, most_freq_res, model_arc)
