@@ -2,8 +2,8 @@ import os
 import wandb
 import numpy as np
 import pandas as pd
-from generator import preprocessing as pp
-from generator.utils import ensure_dir, read_data
+from cosmo import preprocessing as pp
+from cosmo.utils import ensure_dir, read_data
 
 
 def get_args_parser(add_help=True):

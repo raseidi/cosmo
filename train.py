@@ -5,11 +5,11 @@ import pprint
 from torch import nn
 from torch.optim.lr_scheduler import MultiStepLR
 
-from generator.meld import vectorize_log, prepare_log
-from generator.data_loader import get_loader
-from generator import MTCondLSTM, MTCondDG
-from generator.training import train
-from generator.utils import get_runs, get_vocabs, read_data
+from cosmo.meld import vectorize_log, prepare_log
+from cosmo.data_loader import get_loader
+from cosmo import MTCondLSTM, MTCondDG
+from cosmo.training import train
+from cosmo.utils import get_runs, get_vocabs, read_data
 
 
 def get_args_parser(add_help=True):

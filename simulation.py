@@ -4,12 +4,12 @@ import pandas as pd
 from itertools import product
 from argparse import Namespace
 
-from generator import MTCondLSTM, MTCondDG
-from generator.data_loader import get_loader
-from generator.meld import prepare_log, vectorize_log
-from generator.simulator.simulator import simulate_from_scratch, simulate_remaining_case
-from generator.utils import get_runs, load_checkpoint, get_vocabs, read_data
-from generator.preprocessing import label_variants
+from cosmo import MTCondLSTM, MTCondDG
+from cosmo.data_loader import get_loader
+from cosmo.meld import prepare_log, vectorize_log
+from cosmo.simulator.simulator import simulate_from_scratch, simulate_remaining_case
+from cosmo.utils import get_runs, load_checkpoint, get_vocabs, read_data
+from cosmo.preprocessing import label_variants
 
 
 def get_variants(df):
