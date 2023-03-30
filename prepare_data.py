@@ -136,9 +136,9 @@ if __name__ == "__main__":
 
     df.to_csv(output_file, index=False)
 
-    run = wandb.init(project="bpm23", job_type="dataset-creation")
-    dataset = wandb.Artifact("RequestForPayment", type="dataset")
-    dataset.add_file("data/RequestForPayment/log.csv")
-    run.log_artifact(dataset)
+    # run = wandb.init(project="bpm23", job_type="dataset-creation")
+    # dataset = wandb.Artifact("RequestForPayment", type="dataset")
+    # dataset.add_file("data/RequestForPayment/log.csv")
+    # run.log_artifact(dataset)
 
-    wandb.finish()
+    # wandb.finish()

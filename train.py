@@ -1,3 +1,7 @@
+"""
+Script for tuning models using WandB Sweeps.
+"""
+
 import torch
 import wandb
 import pprint
@@ -16,7 +20,7 @@ def get_args_parser(add_help=True):
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Pytorch Implementation for Condition-based Trace Generator",
+        description="Pytorch Implementation for CoSMo",
         add_help=add_help,
     )
 
@@ -28,7 +32,7 @@ def get_args_parser(add_help=True):
     )
     parser.add_argument(
         "--condition",
-        default="trace_time",
+        default="resource_usage",
         type=str,
         help="condition",
     )
@@ -76,7 +80,7 @@ def get_args_parser(add_help=True):
 
     parser.add_argument(
         "--project-name",
-        default="test",
+        default="bpm23",
         type=str,
         help="Wandb project name",
     )
