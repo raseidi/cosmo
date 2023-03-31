@@ -5,5 +5,9 @@ notes
 *.pyc
 __pycache__/
 .vscode
-results/
+results/datasets/
+results/plots/
+results/simulations/
+results/*.ipynb
+results/predictions.csv
 playground.py

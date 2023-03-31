@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from pm4py import discover_petri_net_heuristics as heuristics
 from pm4py import discover_petri_net_inductive as inductive_miner
 from pm4py import fitness_token_based_replay as fitness_token_replay
+
 # from pm4py import fitness_alignments
 from pm4py.conformance import fitness_alignments
 
@@ -134,15 +135,9 @@ def minimum_performance(dataset, condition, wandb_performances):
     return False
 
 
-def trace_time_boxplot(log, sim, dataset, condition):
-    df = pd.concat([log, sim], ignore_index=True)
-    plt.figure()
-    sns.boxplot(x="condition", y="duration", hue="type_set", data=df)
-    plt.savefig(f"results/plots/{dataset}_{condition}.png")
-    plt.close()
-
-
-def positioning_resource_scores(log, sim, most_freq_res, model_arc, constraint="resource_usage"):
+def positioning_resource_scores(
+    log, sim, most_freq_res, model_arc, constraint="resource_usage"
+):
     position_scores = {}
     for case in log[log.type_set == "test"].case_id.unique():
         trace = log[log.case_id == case].reset_index(drop=True)
@@ -204,10 +199,10 @@ def positioning_resource_scores(log, sim, most_freq_res, model_arc, constraint="
         f"results/datasets/resource_usage/{dataset}{model_arc}_positioning_accuracy.csv",
         index=False,
     )
-    plt.figure()
-    sns.lineplot(x="pos", y="accuracy", hue="resource_usage", data=final)
-    plt.savefig(f"results/plots/{dataset}_{constraint}{model_arc}.png")
-    plt.close()
+    # plt.figure()
+    # sns.lineplot(x="pos", y="accuracy", hue="resource_usage", data=final)
+    # plt.savefig(f"results/plots/{dataset}_{constraint}{model_arc}.png")
+    # plt.close()
 
 
 def filter_sim_from_scratch(log, sim):
@@ -218,12 +213,6 @@ def filter_sim_from_scratch(log, sim):
     this method simply appends the first event of each case to the
     begining of each simulated case.
 
-    Args:
-        log (_type_): _description_
-        sim (_type_): _description_
-
-    Returns:
-        _type_: _description_
     """
     log_pos_0 = log[log.type_set == "test"].drop_duplicates("case_id", keep="first")
     log_pos_0["time"] = pd.Timestamp.min
@@ -244,8 +233,8 @@ if __name__ == "__main__":
     sim_path = "results/simulations"
     log_path = "data/"
     wandb_performances = pd.read_csv("results/best_runs.csv")
-    final_scores = read_sim_scores("results/sim_evaluation_v3.csv")
-    final_accumulated_scores = read_sim_scores("results/sim_evaluation_accum_v3.csv")
+    final_scores = read_sim_scores("results/sim_evaluation.csv")
+    final_accumulated_scores = read_sim_scores("results/sim_evaluation_accum.csv")
 
     datasets = pd.read_csv("results/datasets_statistics.csv").dataset.unique()
     sym_types = ["on_going"]
@@ -260,15 +249,10 @@ if __name__ == "__main__":
         "BPI_Challenge_2012",
         "BPI_Challenge_2012_W_Complete",
     ]
-    models = ["DG"]
+    models = ["Baseline", "DG"]
     prods = product(datasets, sym_types, conditions, models)
 
     for dataset, sim_type, condition, model_arc in prods:
-        # condition = "resource_usage"
-        # sim_type = "on_going"
-        # if os.path.exists(f"results/plots/{dataset}_{condition}.png"):
-        #     continue
-
         if dataset in ignore_datasets and condition == "resource_usage":
             print("ignore")
             continue
@@ -282,8 +266,9 @@ if __name__ == "__main__":
         if not os.path.exists(os.path.join("data", dataset, "log.csv")):
             print(os.path.join("data", dataset, "log.csv"), "Doest not exist.")
             continue
-
-        scores = dict(dataset=dataset, sim_type=sim_type, condition=condition, model=model_arc)
+        scores = dict(
+            dataset=dataset, sim_type=sim_type, condition=condition, model=model_arc
+        )
         accumulated_scores = dict()
         """ reading and preprocessing data """
         log = pd.read_csv(os.path.join("data", dataset, "log.csv"))
@@ -294,17 +279,9 @@ if __name__ == "__main__":
             lambda x: np.exp(x.max()) / (24 * 60 * 60)
         )
         most_freq_res = log["resource"].value_counts().nlargest(2).idxmin()
-        resource_is_numerical = log.resource.dtype == float
-        if resource_is_numerical:
-            try:
-                mean = log[log.type_set == "train"].resource.mean()
-                std = log[log.type_set == "train"].resource.std()
-            except:
-                print("categorical resource")
-                continue
 
         sim_data = os.path.join(
-            sim_path, "_".join([dataset, condition+model_arc, sim_type]) + ".csv"
+            sim_path, "_".join([dataset, condition + model_arc, sim_type]) + ".csv"
         )
         if not os.path.exists(sim_data):
             print("simulated log doesnt exist")
@@ -317,12 +294,7 @@ if __name__ == "__main__":
         )
         sim["case_id"] = sim["case_id"].astype(str)
 
-        if resource_is_numerical:
-            sim["resource"] = sim["resource"] * std + mean
         sim = sim[(sim.activity != "<eos>") & (sim.activity != "<pad>")]
-
-        # sim = label_variants(sim)
-        # log = label_variants(log)
 
         le = LabelEncoder().fit(log.activity.values)
         log["enc_ac"] = le.transform(log.activity.values)
@@ -350,15 +322,13 @@ if __name__ == "__main__":
         print("[+] CLFS SCORE")
         true_vars = get_variants(log, column="enc_ac")
         pred_vars = get_variants(from_scratch, column="enc_ac")
+        from_scratch    
         cfls_score = cfls(true_vars, pred_vars)
         scores.update(
             {"cfls_mean": np.mean(cfls_score), "cfls_std": np.std(cfls_score)}
         )
         accumulated_scores["cfls"] = cfls_score
 
-        # # TodO
-        # # if i can plot bar plot with mean+std only, without the whole array
-        # # the following lines are not needed
         accumulated_scores = pd.DataFrame(accumulated_scores)
         accumulated_scores["dataset"] = dataset
         accumulated_scores["condition"] = condition
@@ -379,62 +349,27 @@ if __name__ == "__main__":
             "case_id_key": "case_id",
         }
 
-        # fit = fitness_token_replay(log[log.type_set == "train"], **fitness_config)
-        # # for some unkown reason the pm4py multiplies this key by 100
-        # # and duplicates it
-        # # update: multiplies by 100 cause it is the percentage, not
-        # # the fitness score itself
-        # fit["perc_fit_traces"] /= 100
-        # _ = fit.pop("percentage_of_fitting_traces")
-        # fit = {"gr_tr_" + k: v for k, v in fit.items()}
-        # scores.update(fit)
-
         fit = fitness_token_replay(from_scratch, **fitness_config)
         fit["perc_fit_traces"] /= 100
         _ = fit.pop("percentage_of_fitting_traces")
         fit = {"sim_tr_" + k: v for k, v in fit.items()}
         scores.update(fit)
 
-        # fit = fitness_alignments(log=log, multi_processing=True, **fitness_config)
-        # fit = {"gr_al_" + k: v for k, v in fit.items()}
+        # aligment is crashing
+        # see https://github.com/pm4py/pm4py-core/issues/395
+        # fit = fitness_alignments(from_scratch, multi_processing=True, **fitness_config)
+        # fit = {"sim_al_" + k: v for k, v in fit.items()}
         # scores.update(fit)
 
-        # sizes = from_scratch.groupby("case_id").size()
-        # sizes = sizes[sizes < 50]
-        # small_log = from_scratch[from_scratch.case_id.isin(sizes.index)]
-        
-        fit = fitness_alignments(from_scratch, multi_processing=True, **fitness_config)
-        fit = {"sim_al_" + k: v for k, v in fit.items()}
-        scores.update(fit)
-
-        # break
         final_scores = pd.concat((final_scores, pd.DataFrame([scores])))
-        final_scores.to_csv("results/sim_evaluation_v3.csv", index=False)
+        final_scores.to_csv("results/sim_evaluation.csv", index=False)
         final_accumulated_scores = pd.concat(
             (final_accumulated_scores, accumulated_scores)
         )
-        final_accumulated_scores.to_csv("results/sim_evaluation_accum_v3.csv", index=False)
-        # """ what-if analysis """
-        # print("[+] WHAT-IF ANALYSIS")
-        # if condition == "trace_time":
-        #     a = (
-        #         log[log.type_set == "test"]
-        #         .drop_duplicates("case_id")
-        #         .reset_index(drop=True)
-        #     )
-        #     b = (
-        #         from_scratch[from_scratch.type_set.isna()]
-        #         .drop_duplicates("case_id")
-        #         .reset_index(drop=True)
-        #     )
-        #     b["type_set"] = "sim"
+        final_accumulated_scores.to_csv("results/sim_evaluation_accum.csv", index=False)
+        """ what-if analysis """
+        print("[+] WHAT-IF ANALYSIS")
 
-        #     trace_time_boxplot(
-        #         log=a,
-        #         sim=b,
-        #         dataset=dataset,
-        #         condition=condition,
-        #     )
-        # elif condition == "resource_usage":
-        #     if model_arc == "DG":
-        #         positioning_resource_scores(log, sim, most_freq_res, model_arc)
+        if condition == "resource_usage":
+            if model_arc == "DG":
+                positioning_resource_scores(log, sim, most_freq_res, model_arc)

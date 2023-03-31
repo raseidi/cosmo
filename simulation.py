@@ -1,5 +1,4 @@
 import os
-import torch
 import pandas as pd
 from itertools import product
 from argparse import Namespace
@@ -7,22 +6,19 @@ from argparse import Namespace
 from cosmo import MTCondLSTM, MTCondDG
 from cosmo.data_loader import get_loader
 from cosmo.meld import prepare_log, vectorize_log
-from cosmo.simulator.simulator import simulate_from_scratch, simulate_remaining_case
-from cosmo.utils import get_runs, load_checkpoint, get_vocabs, read_data
-from cosmo.preprocessing import label_variants
+from cosmo.simulator.simulator import simulate_remaining_case
+from cosmo.utils import ensure_dir, get_runs, load_checkpoint, get_vocabs, read_data
 
 
-def get_variants(df):
-    variants = df.groupby(["case_id"])["activity"].apply(
-        list
-    )  # transform groupby into list
-    variants = variants.apply(
-        lambda x: ",".join(map(str, x))
-    )  # transfor list into a unique string
-    return sorted(set(variants))
+def read_tuning_results() -> pd.DataFrame:
+    """Returns a dataframe containing all the runs from wandb.
 
+    If the runs are not available locally it reads it from wandb.
+    ToDo: make wandb project public so anyone can read the runs.
 
-def read_tuning_results():
+    Returns:
+        runs: pd.DataFrame
+    """
     if os.path.exists("results/all_runs.csv"):
         runs = pd.read_csv("results/all_runs.csv")
     else:  # wandb api sometimes takes a while to load everything
@@ -53,6 +49,11 @@ def get_best_run(dataset: str, condition: str, runs, metric="test_loss"):
 
 
 def ensure_model(dataset, condition, model):
+    """
+    Function to ensure a model has been trained for a given dataset.
+
+    If the `run` at wandb exists, continue. Otherwise, train the model from scratch.
+    """
     try:
         bpm_results = pd.read_csv("results/best_runs.csv")
     except:
@@ -79,68 +80,34 @@ def ensure_model(dataset, condition, model):
         bpm_results.to_csv("results/best_runs.csv", index=False)
 
 
-"""
-1. read bpm23 project
-2. check if dataset model exists, otherwise read results and get best run
-    2.1. retrain the model from the best run
-3. load the model checkpoint
-4. simulate from scratch
-5. simulate on going cases
-"""
-datasets = pd.read_csv(os.path.join("results", "datasets_statistics.csv"))[
-    "dataset"
-].unique()
-conditions = ["resource_usage"]
-prods = product(datasets, conditions)
-data_stats = pd.read_csv("results/datasets_statistics.csv")
-ignore_datasets = [
-    "BPI_Challenge_2012_W",
-    "BPI_Challenge_2012_Complete",
-    "BPI_Challenge_2012_W_Complete",
-    "BPI_Challenge_2012_A",
-    "BPI_Challenge_2012_O",
-    "BPI_Challenge_2012",
+ensure_dir("results/")
+ensure_dir("results/simulations")
+ensure_dir("results/datasets")
+datasets = [
+    "PrepaidTravelCost",
+    "PermitLog",
+    "bpi17",
+    "bpi_challenge_2013_incidents",
+    "BPI_Challenge_2013_closed_problems",
+    "RequestForPayment",
+    "bpi19",
 ]
+conditions = ["resource_usage"]
 
-# dataset = "bpi19"
-# condition = "resource_usage"
-# model = "baseline"
-model_arc = "DG"
-for dataset, condition in prods:
-    # if dataset in ["bpi19", "bpi17"]:
-    #     continue
-    # dataset="RequestForPayment"
-    if dataset in ignore_datasets and condition == "resource_usage":
-        continue
+model_arcs = ["Baseline", "DG"]  # "" refers to the baseline
+prods = product(datasets, conditions, model_arcs)
+for dataset, condition, model_arc in prods:
     ensure_model(dataset=dataset, condition=condition, model=model_arc)
 
     bpm_results = pd.read_csv(os.path.join("results", "best_runs.csv"))
     params = best_to_dict(bpm_results, dataset, condition)
     params = Namespace(**params)
-    # print(params)
-    # params = Namespace(
-    #     batch_size=64,
-    #     condition="trace_time",
-    #     dataset="bpi_challenge_2013_incidents",
-    #     device="cuda",
-    #     epochs=50,
-    #     lr=0.0007648621728067,
-    #     optimizer="adam",
-    #     project_name="bpm23",
-    #     run_name="tough-smoke-26",
-    #     weight_decay=0.0,
-    # )
 
     log = read_data(os.path.join("data", params.dataset, "log.csv"))
     log["target"] = log[params.condition]
     log.drop(["trace_time", "resource_usage", "variant"], axis=1, inplace=True)
     log = prepare_log(log)
     vocabs = get_vocabs(log=log)
-    if "resource" not in vocabs:  # i.e. resource is numerical
-        # z score normalization for numerical resource
-        mean = log.loc[log.type_set == "train", "resource"].mean()
-        std = log.loc[log.type_set == "train", "resource"].std()
-        log.loc[:, "resource"] = (log.loc[:, "resource"] - mean) / std
 
     for f in vocabs:
         log.loc[:, f] = log.loc[:, f].transform(lambda x: vocabs[f]["stoi"][x])
@@ -148,7 +115,12 @@ for dataset, condition in prods:
     # no need to load train loader here
     _, data_test = vectorize_log(log)
     test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
-    model = MTCondDG(vocabs=vocabs, batch_size=params.batch_size)
+    if model_arc == "Baseline":
+        model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
+    elif model_arc == "DG":
+        model = MTCondDG(vocabs=vocabs, batch_size=params.batch_size)
+    else:
+        continue
     checkpoint = load_checkpoint(
         ckpt_dir_or_file=f"models/{params.dataset}/{params.condition}/{params.run_name}/best_model.ckpt"
     )
@@ -156,45 +128,20 @@ for dataset, condition in prods:
     model.cuda()
     model.eval()
 
-    # max_len_trace = data_stats[data_stats.dataset == params.dataset][
-    #     "len_trace_max"
-    # ].values[0]
-    # it's gonna generate half for each condition
-    # n_traces = 5 # int(log[log.type_set == "test"].case_id.nunique() / 2)
-
     itos = {value: key for key, value in vocabs["activity"]["stoi"].items()}
     if "resource" in vocabs:
         ritos = {value: key for key, value in vocabs["resource"]["stoi"].items()}
-    # if not os.path.exists(
-    #     f"results/simulations/{params.dataset}_{params.condition}_from_scratch.csv"
-    # ):
-    #     from_scratch = simulate_from_scratch(
-    #         model, n_traces=n_traces, max_len=max_len_trace
-    #     )
-    #     from_scratch.activity = from_scratch.activity.apply(lambda x: itos[x])
-    #     if "resource" not in vocabs:  # i.e. resource is numerical
-    #         # z score normalization for numerical resource
-    #         from_scratch.loc[:, "resource"] = (
-    #             from_scratch.loc[:, "resource"] * std + mean
-    #         )
-
-    #     from_scratch.to_csv(
-    #         f"results/simulations/{params.dataset}_{params.condition}_from_scratch.csv",
-    #         index=False,
-    #     )
 
     if not os.path.exists(
-        f"results/simulations/{params.dataset}_{params.condition}{model_arc}_on_going.csv"
+        f"results/simulations/{params.dataset}_{params.condition}_{model_arc}.csv"
     ):
         on_going = simulate_remaining_case(model, log[log.type_set == "test"])
         on_going.activity = on_going.activity.apply(lambda x: itos[x])
-        if "resource" not in vocabs:  # i.e. resource is numerical
-            # z score normalization for numerical resource
-            on_going.loc[:, "resource"] = on_going.loc[:, "resource"] * std + mean
-        else:
+        if "resource" in vocabs:  # i.e. resource is numerical
             on_going.resource = on_going.resource.apply(lambda x: ritos[x])
 
         on_going.to_csv(
-            f"results/simulations/{params.dataset}_{params.condition}{model_arc}_on_going.csv",
+            f"results/simulations/{params.dataset}_{params.condition}_{model_arc}.csv",
             index=False,
         )
+    break

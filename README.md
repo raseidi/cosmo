@@ -1,6 +1,6 @@
 # CoSMo: a Framework for Implementing Conditioned Process Simulation Models
 
-This is a Pytorch implementation of the [CoSMo paper](.):
+This is a Pytorch implementation of the [CoSMo preprint](.):
 
 ```
 @Article{Oyamada23cosmo,
@@ -77,7 +77,7 @@ The `--condition` regards the function name for conditioning (labeling) cases. W
 
 ### Simulation
 
-In this current version of the repository, this script runs the simulations for all datasets. In future versions we will include arguments to make it easier. The simulated datasets are persisted in `results/simulations/<dataset>_<condition><architecture>_on_going.csv`. Just run:
+In this current version of the repository, this script runs the simulations for all datasets. In future versions we will include arguments to make it easier. The simulated datasets are saved at `results/simulations/<dataset>_<condition>_<architecture>.csv`. Just run:
 
 ```
 python3 simulation.py
@@ -85,7 +85,7 @@ python3 simulation.py
 
 ### Evaluation
 
-This scrip shares the same limitation than previous one. Results are saved in `results/`. Just run:
+This script shares the same limitation than previous one. Results are saved at `results/`. Just run:
 
 ```
 python3 evaluation.py

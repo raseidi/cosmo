@@ -50,7 +50,11 @@ def next_evt_pred(model, test_loader, device="cuda"):
 
 
 def best_to_dict(df, dataset, condition, model="DG"):
-    res = df[(df.dataset == dataset) & (df.condition == condition) & (df.model == model)].iloc[0, :].to_dict()
+    res = (
+        df[(df.dataset == dataset) & (df.condition == condition) & (df.model == model)]
+        .iloc[0, :]
+        .to_dict()
+    )
     res = {
         key: value
         for key, value in res.items()
@@ -120,7 +124,7 @@ if __name__ == "__main__":
             model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
         elif model_arc == "DG":
             model = MTCondDG(vocabs=vocabs, batch_size=params.batch_size)
-        
+
         checkpoint = load_checkpoint(
             ckpt_dir_or_file=f"models/{params.dataset}/{params.condition}/{params.run_name}/best_model.ckpt"
         )
