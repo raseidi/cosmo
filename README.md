@@ -1,12 +1,12 @@
 # CoSMo: a Framework for Implementing Conditioned Process Simulation Models
 
-This is a Pytorch implementation of the [CoSMo preprint](.):
+This is a Pytorch implementation of the [CoSMo preprint](https://arxiv.org/abs/2303.17879):
 
 ```
 @Article{Oyamada23cosmo,
   author  = {Rafael Oyamada and Gabriel Tavares and Paolo Ceravolo},
   title   = {CoSMo: a Framework for Implementing Conditioned Process Simulation Models},
-  journal = {arXiv preprint},
+  journal = {arXiv abs/2303.17879},
   year    = {2023},
 }
 ```

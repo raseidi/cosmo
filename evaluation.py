@@ -322,7 +322,7 @@ if __name__ == "__main__":
         print("[+] CLFS SCORE")
         true_vars = get_variants(log, column="enc_ac")
         pred_vars = get_variants(from_scratch, column="enc_ac")
-        from_scratch    
+        from_scratch
         cfls_score = cfls(true_vars, pred_vars)
         scores.update(
             {"cfls_mean": np.mean(cfls_score), "cfls_std": np.std(cfls_score)}

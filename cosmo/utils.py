@@ -137,7 +137,7 @@ def get_runs(
     import pandas as pd
 
     api = wandb.Api()
-    runs = api.runs(project)
+    runs = api.runs(f"raseidi/{project}")
 
     cols = None
     results = pd.DataFrame()
