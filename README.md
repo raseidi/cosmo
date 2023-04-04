@@ -90,3 +90,56 @@ This script shares the same limitation than previous one. Results are saved at `
 ```
 python3 evaluation.py
 ```
+
+### Networks' details
+
+**Shared hyperparams**
+- prefix_len = 5
+- num_epochs = 50
+- Embedding layers
+  - emb_activity: `sqrt(len(set(activity)))`
+  - emb_resource: `sqrt(len(set(resource)))`
+- lr: [1e-3, 1e-6]
+- weight_decay: {0, 1e-2, 1e-3}
+- batch_size: {64, 256, 512}
+- optmizers
+  - sgd
+    - momentum: 0.9
+  - adam
+- lr_scheduler: `MultiStepLR(optm, milestones=[25, 35], gamma=0.1)`
+
+**Baseline**
+
+
+- LSTM block
+  - input_dim: len(emb_activity) + len(emb_resource) + len(\[remaining_time\])
+  - hidden_size: 256
+  - num_layers: 2
+- MLP block
+  ```
+  nn.Sequential(
+            nn.Linear(1 + (self.hidden_size * self.prefix_len), 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+  )``` 
+- output layers
+  - in_dim: 256
+  - out_dim: self.vocabs[feature]["size"] if categorical 1 otherwise
+  
+**DeepGenerator**
+- LSTM block
+  - input_dim: len(emb_activity) + len(emb_resource) + len(\
+  - hidden_size: 256
+  - num_layers: 1
+- specielized block
+  - lstm 
+    - input_dim = 256
+    - hidden_size = 256
+    - num_layers = 1
+  - linear layer
+    - input_dim: 1 + hidden_size * prefix_len
+    - out_dim: self.vocabs[feature]["size"] if categorical 1 otherwise
+
