@@ -105,15 +105,15 @@ def read_data(path, format_cols=False):
 
     df = pd.read_csv(path)
     if format_cols:
-        df = df.loc[
-            :,
-            [
-                "case:concept:name",
-                "concept:name",
-                "org:resource",
-                "time:timestamp",
-            ],
-        ]
+        # df = df.loc[
+        #     :,
+        #     [
+        #         "case:concept:name",
+        #         "concept:name",
+        #         "org:resource",
+        #         "time:timestamp",
+        #     ],
+        # ]
         df = df.rename(
             columns={
                 "case:concept:name": "case_id",

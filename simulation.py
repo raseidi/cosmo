@@ -79,69 +79,69 @@ def ensure_model(dataset, condition, model):
         bpm_results = get_runs("bpm23")
         bpm_results.to_csv("results/best_runs.csv", index=False)
 
+if __name__ == "__main__":
+    ensure_dir("results/")
+    ensure_dir("results/simulations")
+    ensure_dir("results/datasets")
+    datasets = [
+        "PrepaidTravelCost",
+        "PermitLog",
+        "bpi17",
+        "bpi_challenge_2013_incidents",
+        "BPI_Challenge_2013_closed_problems",
+        "RequestForPayment",
+        "bpi19",
+    ]
+    conditions = ["resource_usage"]
 
-ensure_dir("results/")
-ensure_dir("results/simulations")
-ensure_dir("results/datasets")
-datasets = [
-    "PrepaidTravelCost",
-    "PermitLog",
-    "bpi17",
-    "bpi_challenge_2013_incidents",
-    "BPI_Challenge_2013_closed_problems",
-    "RequestForPayment",
-    "bpi19",
-]
-conditions = ["resource_usage"]
+    model_arcs = ["Baseline", "DG"]  # "" refers to the baseline
+    prods = product(datasets, conditions, model_arcs)
+    for dataset, condition, model_arc in prods:
+        ensure_model(dataset=dataset, condition=condition, model=model_arc)
 
-model_arcs = ["Baseline", "DG"]  # "" refers to the baseline
-prods = product(datasets, conditions, model_arcs)
-for dataset, condition, model_arc in prods:
-    ensure_model(dataset=dataset, condition=condition, model=model_arc)
+        bpm_results = pd.read_csv(os.path.join("results", "best_runs.csv"))
+        params = best_to_dict(bpm_results, dataset, condition)
+        params = Namespace(**params)
 
-    bpm_results = pd.read_csv(os.path.join("results", "best_runs.csv"))
-    params = best_to_dict(bpm_results, dataset, condition)
-    params = Namespace(**params)
+        log = read_data(os.path.join("data", params.dataset, "log.csv"))
+        log["target"] = log[params.condition]
+        log.drop(["trace_time", "resource_usage", "variant"], axis=1, inplace=True)
+        log = prepare_log(log)
+        vocabs = get_vocabs(log=log)
 
-    log = read_data(os.path.join("data", params.dataset, "log.csv"))
-    log["target"] = log[params.condition]
-    log.drop(["trace_time", "resource_usage", "variant"], axis=1, inplace=True)
-    log = prepare_log(log)
-    vocabs = get_vocabs(log=log)
+        for f in vocabs:
+            log.loc[:, f] = log.loc[:, f].transform(lambda x: vocabs[f]["stoi"][x])
 
-    for f in vocabs:
-        log.loc[:, f] = log.loc[:, f].transform(lambda x: vocabs[f]["stoi"][x])
-
-    # no need to load train loader here
-    _, data_test = vectorize_log(log)
-    test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
-    if model_arc == "Baseline":
-        model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
-    elif model_arc == "DG":
-        model = MTCondDG(vocabs=vocabs, batch_size=params.batch_size)
-    else:
-        continue
-    checkpoint = load_checkpoint(
-        ckpt_dir_or_file=f"models/{params.dataset}/{params.condition}/{params.run_name}/best_model.ckpt"
-    )
-    model.load_state_dict(checkpoint["net"])
-    model.cuda()
-    model.eval()
-
-    itos = {value: key for key, value in vocabs["activity"]["stoi"].items()}
-    if "resource" in vocabs:
-        ritos = {value: key for key, value in vocabs["resource"]["stoi"].items()}
-
-    if not os.path.exists(
-        f"results/simulations/{params.dataset}_{params.condition}_{model_arc}.csv"
-    ):
-        on_going = simulate_remaining_case(model, log[log.type_set == "test"])
-        on_going.activity = on_going.activity.apply(lambda x: itos[x])
-        if "resource" in vocabs:  # i.e. resource is numerical
-            on_going.resource = on_going.resource.apply(lambda x: ritos[x])
-
-        on_going.to_csv(
-            f"results/simulations/{params.dataset}_{params.condition}_{model_arc}.csv",
-            index=False,
+        # no need to load train loader here
+        _, data_test = vectorize_log(log)
+        test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
+        if model_arc == "Baseline":
+            model = MTCondLSTM(vocabs=vocabs, batch_size=params.batch_size)
+        elif model_arc == "DG":
+            model = MTCondDG(vocabs=vocabs, batch_size=params.batch_size)
+        else:
+            continue
+        checkpoint = load_checkpoint(
+            ckpt_dir_or_file=f"models/{params.dataset}/{params.condition}/{params.run_name}/best_model.ckpt"
         )
-    break
+        model.load_state_dict(checkpoint["net"])
+        model.cuda()
+        model.eval()
+
+        itos = {value: key for key, value in vocabs["activity"]["stoi"].items()}
+        if "resource" in vocabs:
+            ritos = {value: key for key, value in vocabs["resource"]["stoi"].items()}
+
+        if not os.path.exists(
+            f"results/simulations/{params.dataset}_{params.condition}_{model_arc}.csv"
+        ):
+            on_going = simulate_remaining_case(model, log[log.type_set == "test"])
+            on_going.activity = on_going.activity.apply(lambda x: itos[x])
+            if "resource" in vocabs:  # i.e. resource is numerical
+                on_going.resource = on_going.resource.apply(lambda x: ritos[x])
+
+            on_going.to_csv(
+                f"results/simulations/{params.dataset}_{params.condition}_{model_arc}.csv",
+                index=False,
+            )
+        break

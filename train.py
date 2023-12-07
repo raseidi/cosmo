@@ -26,13 +26,13 @@ def get_args_parser(add_help=True):
 
     parser.add_argument(
         "--dataset",
-        default="RequestForPayment",
+        default="bpi17",
         type=str,
         help="dataset",
     )
     parser.add_argument(
         "--condition",
-        default="resource_usage",
+        default="binary_O_Accepted",
         type=str,
         help="condition",
     )
@@ -52,7 +52,7 @@ def get_args_parser(add_help=True):
 
     parser.add_argument(
         "--epochs",
-        default="50",
+        default="10",
         type=int,
         help="Number of epochs",
     )
@@ -80,7 +80,7 @@ def get_args_parser(add_help=True):
 
     parser.add_argument(
         "--project-name",
-        default="bpm23",
+        default="test",
         type=str,
         help="Wandb project name",
     )
@@ -106,7 +106,9 @@ def main(params=None):
     config = logger.config
     log = read_data(f"data/{params.dataset}/log.csv")
     log["target"] = log[params.condition]
-    log.drop(["trace_time", "resource_usage", "variant"], axis=1, inplace=True)
+    # binary_cols = [bc for bc in log.columns if bc.startswith("binary_")]
+    # log.drop(["trace_time", "resource_usage", "variant"], axis=1, inplace=True, errors="ignore")
+    log = log[["case_id", "activity", "remaining_time", "resource", "target", "time", "type_set"]]
     log = prepare_log(log)
     vocabs = get_vocabs(log)
     # encoding
@@ -131,8 +133,8 @@ def main(params=None):
     test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
 
     torch.manual_seed(0)
-    # model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
-    model = MTCondDG(vocabs=vocabs, batch_size=config.batch_size)
+    model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
+    # model = MTCondDG(vocabs=vocabs, batch_size=config.batch_size)
 
     def init_weights(m):
         if isinstance(m, nn.Linear):

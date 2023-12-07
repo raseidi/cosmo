@@ -15,13 +15,13 @@ def get_args_parser(add_help=True):
     )
     parser.add_argument(
         "--path",
-        default="/home/seidi/datasets/logs/bpi20/RequestForPayment/train_test",
+        default="/home/seidi/datasets/logs/bpi17/train_test",
         type=str,
         help="Path for benchmarked datasets (Weytjens and Weerdt, 2022)",
     )
     parser.add_argument(
         "--dataset",
-        default="RequestForPayment",
+        default="bpi17",
         type=str,
         help="Dataset name.",
     )
@@ -112,7 +112,11 @@ def log_exists(args):
         return os.path.exists(os.path.join(output_path, "log.csv"))
 
 
-LABEL_FUNCTION = {"trace_time": pp.trace_time, "resource_usage": pp.resource_usage}
+LABEL_FUNCTION = {
+    # "trace_time": pp.trace_time, 
+    # "resource_usage": pp.resource_usage, 
+    "bpi17": pp.bpi17
+}
 if __name__ == "__main__":
     args = get_args_parser().parse_args()
     output = os.path.join("data", args.dataset)
@@ -127,12 +131,20 @@ if __name__ == "__main__":
         df = preprocess(df)
         if df.isna().sum().any():
             print("-" * 80)
+        if "Unnamed: 0" in df.columns:
+            df.drop(columns=["Unnamed: 0"], inplace=True)
+        df.to_csv(output_file, index=False)
     else:
         df = pd.read_csv(output_file)
 
     for condition in LABEL_FUNCTION:
         if condition not in df.columns:
-            df[condition] = LABEL_FUNCTION[condition](df)
+            labels = LABEL_FUNCTION[condition](df)
+            if isinstance(labels, np.ndarray):
+                df[condition] = labels
+            elif isinstance(labels, pd.DataFrame):
+                df = labels.copy()
+                del labels
 
     df.to_csv(output_file, index=False)
 
