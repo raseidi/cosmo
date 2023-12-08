@@ -1,185 +1,153 @@
-"""
-Script for tuning models using WandB Sweeps.
-"""
-
-import torch
-import wandb
 import pprint
+import warnings
+import wandb
+import torch
+from torch.nn import functional as F
+from torch.utils.data import DataLoader
+from cosmo.event_logs import ConstrainedContinuousTraces
+from cosmo.event_logs.utils import collate_fn
+from cosmo.models import NeuralNet
+from cosmo.engine import train
+from cosmo.event_logs import get_declare, LOG_READERS
+import argparse
+from cosmo.utils import experiment_exists
 
-from torch import nn
-from torch.optim.lr_scheduler import MultiStepLR
+# seed everything
+torch.manual_seed(42)
 
-from cosmo.meld import vectorize_log, prepare_log
-from cosmo.data_loader import get_loader
-from cosmo import MTCondLSTM, MTCondDG
-from cosmo.training import train
-from cosmo.utils import get_runs, get_vocabs, read_data
-
-
-def get_args_parser(add_help=True):
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Pytorch Implementation for CoSMo",
-        add_help=add_help,
+def read_args():
+    args = argparse.ArgumentParser()
+    args.add_argument("--dataset", type=str, default="bpi20_permit")
+    args.add_argument("--lr", type=float, default=0.0005)
+    args.add_argument("--batch-size", type=int, default=16)
+    args.add_argument("--weight-decay", type=float, default=1e-1)
+    args.add_argument("--epochs", type=int, default=50)
+    args.add_argument(
+        "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
+    args.add_argument("--shuffle-dataset", type=bool, default=True)
+    args.add_argument("--hidden-size", type=int, default=256)
+    args.add_argument("--input-size", type=int, default=32)
+    args.add_argument("--project-name", type=str, default="cosmo-v7")
+    args.add_argument("--grad-clip", type=float, default=None)
+    args.add_argument("--n-layers", type=int, default=1)
+    args.add_argument("--wandb", type=bool, default=False)
+    args.add_argument("--template", type=str, default="all")
 
-    parser.add_argument(
-        "--dataset",
-        default="bpi17",
-        type=str,
-        help="dataset",
+    return args.parse_args()
+
+
+def run(config):
+    log_reader = LOG_READERS.get(config["dataset"], None)
+    if log_reader is None:
+        raise ValueError(f"Dataset {config['dataset']} not found")
+    log = log_reader()
+
+    declare_constraints = get_declare(config["dataset"], templates=config["template"])
+
+    not_found_constraints = set(log.case_id.unique()) - set(
+        declare_constraints.case_id.unique()
     )
-    parser.add_argument(
-        "--condition",
-        default="binary_O_Accepted",
-        type=str,
-        help="condition",
-    )
-    parser.add_argument(
-        "--device",
-        default="cuda",
-        type=str,
-        help="device (Use cuda or cpu Default: cuda)",
-    )
-
-    parser.add_argument(
-        "--lr",
-        default="0.0001",
-        type=float,
-        help="Learning rate",
-    )
-
-    parser.add_argument(
-        "--epochs",
-        default="10",
-        type=int,
-        help="Number of epochs",
-    )
-
-    parser.add_argument(
-        "--optimizer",
-        default="adam",
-        type=str,
-        help="Optimizer (adam or sgd)",
-    )
-
-    parser.add_argument(
-        "--batch-size",
-        default=64,
-        type=int,
-        help="Batch size",
-    )
-
-    parser.add_argument(
-        "--weight-decay",
-        default=0,
-        type=float,
-        help="Weight decay",
-    )
-
-    parser.add_argument(
-        "--project-name",
-        default="test",
-        type=str,
-        help="Wandb project name",
-    )
-
-    return parser
-
-
-def main(params=None):
-    # params = get_args_parser().parse_args()
-    if params.device == "cuda":
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # print("Warning; gpu not available") #todo
-
-    logger = wandb.init(config=params, project=params.project_name)
-    # todo: how to diff sweep from single/manual run
-    # logger.config.update(
-    #     {
-    #         "dataset": params.dataset,
-    #         "condition": params.condition,
-    #         "device": device.type,
-    #     },
-    # )
-    config = logger.config
-    log = read_data(f"data/{params.dataset}/log.csv")
-    log["target"] = log[params.condition]
-    # binary_cols = [bc for bc in log.columns if bc.startswith("binary_")]
-    # log.drop(["trace_time", "resource_usage", "variant"], axis=1, inplace=True, errors="ignore")
-    log = log[["case_id", "activity", "remaining_time", "resource", "target", "time", "type_set"]]
-    log = prepare_log(log)
-    vocabs = get_vocabs(log)
-    # encoding
-
-    for f in vocabs:
-        log.loc[:, f] = log.loc[:, f].transform(lambda x: vocabs[f]["stoi"][x])
-
-    if "resource" not in vocabs:  # i.e. resource is numerical
-        # z score normalization for numerical resource
-        if params.condition == "resource_usage":
-            # the res usage condition makes no sense for numerical resource
-            logger.finish()
-            return
-        mean = log.loc[log.type_set == "train", "resource"].mean()
-        std = log.loc[log.type_set == "train", "resource"].std()
-        log.loc[:, "resource"] = (log.loc[:, "resource"] - mean) / std
-
-    # ToDo how to track cat features? here we have (act, res, rt)
-    data_train, data_test = vectorize_log(log)
-
-    train_loader = get_loader(data_train, batch_size=config.batch_size)
-    test_loader = get_loader(data_test, batch_size=1024, shuffle=False)
-
-    torch.manual_seed(0)
-    model = MTCondLSTM(vocabs=vocabs, batch_size=config.batch_size)
-    # model = MTCondDG(vocabs=vocabs, batch_size=config.batch_size)
-
-    def init_weights(m):
-        if isinstance(m, nn.Linear):
-            torch.nn.init.kaiming_normal_(m.weight, nonlinearity="relu")
-            m.bias.data.fill_(0.5)
-
-    model.apply(init_weights)
-    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-    model.to(device)
-    wandb.watch(model, log="all")
-    # X, y = next(iter(train_loader))
-    # X = [x.to(device) for x in X]
-    # model(X)
-
-    if "resource" in vocabs:
-        res_loss = nn.CrossEntropyLoss()
-    else:
-        res_loss = nn.MSELoss()
-    criterion = {"clf": nn.CrossEntropyLoss(), "res": res_loss, "reg": nn.MSELoss()}
-    if config.optimizer == "sgd":
-        optm = torch.optim.SGD(
-            model.parameters(),
-            lr=config.lr,
-            momentum=0.9,
-            weight_decay=config.weight_decay,
+    if not_found_constraints:
+        warnings.warn(
+            f"Dropping constraints not found for {len(not_found_constraints)} case(s)"
         )
-    elif config.optimizer == "adam":
-        optm = torch.optim.Adam(
-            model.parameters(), lr=config.lr, weight_decay=config.weight_decay
-        )
-    sc = MultiStepLR(optm, milestones=[25, 35], gamma=0.1)
-    pprint.pprint(config)
+        log = log[~log.case_id.isin(not_found_constraints)]
+
+    train_set, test_set = log[log["split"] == "train"], log[log["split"] == "test"]
+    train_dataset = ConstrainedContinuousTraces(
+        log=train_set,
+        constraints=declare_constraints.copy(),
+        continuous_features=["remaining_time_norm"],
+        categorical_features=["activity"],
+        dataset_name=config["dataset"] + "_" + config["template"],
+        train=True,
+        device=config["device"],
+    )
+    config["n_features"] = train_dataset.num_features
+    test_dataset = ConstrainedContinuousTraces(
+        log=test_set,
+        vocab=train_dataset.get_vocabs(),
+        constraints=declare_constraints.copy(),
+        continuous_features=["remaining_time_norm"],
+        categorical_features=["activity"],
+        dataset_name=config["dataset"] + "_" + config["template"],
+        train=False,
+        device=config["device"],
+    )
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config["batch_size"],
+        shuffle=True,
+        collate_fn=collate_fn,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False,
+        collate_fn=collate_fn,
+    )
+
+    # model
+    model = NeuralNet(
+        vocabs=train_dataset.feature2idx,
+        continuous_size=train_dataset.num_cont_features,
+        constraint_size=train_dataset.num_constraints,
+        input_size=config["input_size"],
+        hidden_size=config["hidden_size"],
+        n_layers=config["n_layers"],
+    )
+
+    optim = torch.optim.AdamW(
+        model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"]
+    )
+    # optim = torch.optim.SGD(model.parameters(), lr=config["lr"], momentum=0.9, weight_decay=0.01)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, factor=0.1, patience=10, verbose=True)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer=optim, T_max=config["epochs"] * config["batch_size"], verbose=True
+    )
+    scaler = torch.cuda.amp.GradScaler()
+
+
+    run_name = f"{config['dataset']}-templates={config['template']}-n_features={train_dataset.num_features}-lr={config['lr']}-bs={config['batch_size']}-wd={config['weight_decay']}-epochs{config['epochs']}-hidden={config['hidden_size']}-input={config['input_size']}-gradclip={config['grad_clip']}-nlayers={config['n_layers']}"
+    
+    if config["wandb"]:
+        wandb.init(project=config["project_name"], config=config, name=run_name)
+        wandb.watch(model, log="all")
+    
+    config["run_name"] = run_name
+
     train(
         model=model,
         train_loader=train_loader,
         test_loader=test_loader,
-        loss_fn=criterion,
-        optimizer=optm,
-        sc=sc,
-        logger=logger,
+        optimizer=optim,
+        scaler=scaler,
+        config=config,
+        scheduler=scheduler,
     )
-    logger.finish()
-
+    if config["wandb"]:
+        wandb.finish()
 
 if __name__ == "__main__":
-    params = get_args_parser().parse_args()
-    main(params)
+    config = read_args()
+    config = vars(config)
+    if config["dataset"] == "bpi19":
+        exit(0)
+    
+    print("\n\nConfig:")
+    pprint.pprint(config)
+
+    if experiment_exists(config):
+        print("Experiment exists, skipping...\n\n")
+        exit(0)
+
+    if config["hidden_size"] < config["input_size"]:
+        print("Hidden size must be greater than input size")
+        exit(1)
+
+    print("Running...")
+    run(config)
+    # import cProfile
+    # cProfile.runctx('run(config)', globals(), locals(), filename="train.prof", sort="cumtime")
+

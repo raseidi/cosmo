@@ -1,13 +1,19 @@
-data/
-models/
-wandb/
-notes
-*.pyc
+# logs, cache, etc
+.vscode/
+.pytest_cache/
 __pycache__/
-.vscode
-results/datasets/
-results/plots/
-results/simulations/
-results/*.ipynb
-results/predictions.csv
-playground.py
+wandb/
+models/
+
+# data
+data/
+
+# helpers
+debug.py
+pad.py
+related_paper.md
+cufile.log
+raw_statistics.csv
+statistics.csv
+*.ipynb
+experiments.csv

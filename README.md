@@ -13,133 +13,77 @@ This is a Pytorch implementation of the [CoSMo preprint](https://arxiv.org/abs/2
 
 ## Enviroment
 
-To install and activate the enviroment, run:
+The following commands create an enviroment and install the dependencies.
 
-```
-conda env create --file env.yml
+```bash
+conda create -n python=3.10 cosmo pip
 conda activate cosmo
+pip install -r requirements.txt
 ```
 
-The current version uses wandb for tracking experiments, it is necessary to [set up your account](https://docs.wandb.ai/guides/app/settings-page/user-settings).
+We optionally use wandb for tracking experiments, it is necessary to [set up your account though](https://docs.wandb.ai/guides/app/settings-page/user-settings).
 
+---
 
-## Preparation
+## Download event logs 
 
-We use [these benchmarked event logs](https://github.com/hansweytjens/predictive-process-monitoring-benchmarks/). Follow the instructions from the link to prepare a specific dataset.
+TODO: 
 
-## CoSMo Pipeline
+- upload to cloud before including them here
+- set optional wandb
 
-After installing the enviroment and setting up the benchmarked event logs, the experiments can be reproduced by running the following scripts, respectively:
+## Preprocessing and training
 
-```
-python3 prepare_data.py
-python3 train.py
-python3 simulation.py
-python3 evaluation.py
-```
+1. Run `preprocess_log.py` to preprocess the event log and extract the DECLARE rules. Arguments:
+   1. `--log-name`: event log to be preprocessed
+2. Subsequently, run `train.py` to train a model. Arguments:
+   - `--dataset` (str): event log name
+   - `--template` (str): declare template
+   - `--lr` (float): learning rate
+   - `--batch-size` (int): batch size
+   - `--weight-decay` (float): weight decay rate
+   - `--epochs` (int): number of epochs
+   - `--device` (str): torch device (cpu or cuda)
+   - `--hidden-size` (int): recurrent layer hidden size 
+   - `--input-size` (int): recurrent layer input size 
+   - `--n-layers` (int): number of recurrent layers
+   - `--wandb` (bool): if wandb should be used or not
+   - `--project-name` (str): wandb project
 
-Each script and its respetive arguments are described below.
+Usage example for preprocessing:
 
-### Prepare data
-
-Default arguments: 
-
-```
-prepare_data.py \
---path benchmarked/bpi20/RequestForPayment/train_test/ \
---dataset RequestForPayment \
-[--overwrite]
-``` 
-
-In this script, `--path` denotes the output directory from the benchmark repository containing the files `train.csv` and `test.csv`. The arugment `--dataset` is an auxiliary parameter in order to distinguish, e.g., the BPI20 variations. Finally, `--overwrite` is an optional argument that replaces the output of `prepare_data.py` if any exists.
-
-This script essencially labels cases according to the conditioning function defined in the paper. This repository can be easily extended by implementing custom conditions.
-
-### Train
-
-With preparing the datasets, the training with custom hyperparameters can be performed using this script. Default arguments:
-
-```
-python3 train.py \
---dataset RequestForPayment \
---condition resource_usage \
---device cuda \
---lr 0.0001 \
---epochs 50 \
---optimizer adam \
---weight-decay 0 \
---project-name bpm23
+```bash
+preprocess_log.py \
+--log--name sepsis 
 ```
 
-The `--condition` regards the function name for conditioning (labeling) cases. We suggest running `RequestForPayment` first for testing since it is the lighest event log (using GPU, 50 epochs finish in a few minutes).
+And for training:
 
-***Note***: this script can be skipped for reproducibility, since the `simulation.py` opens a model or retrains it using the same hyperparameters from the paper. ToDo: list best hyperparameters for each dataset here.
-
-### Simulation
-
-In this current version of the repository, this script runs the simulations for all datasets. In future versions we will include arguments to make it easier. The simulated datasets are saved at `results/simulations/<dataset>_<condition>_<architecture>.csv`. Just run:
-
-```
-python3 simulation.py
-```
-
-### Evaluation
-
-This script shares the same limitation than previous one. Results are saved at `results/`. Just run:
-
-```
-python3 evaluation.py
+``` bash
+python train.py \
+  --dataset sepsis \
+  --template existence \
+  --lr 0.0005 \
+  --batch-size 64 \
+  --epochs 50 \
+  --device cuda \
+  --hidden-size 256 \
+  --input-size 128 \
+  --n-layers 1 \
+  --wandb True \
+  --project-name cosmo 
 ```
 
-### Networks' details
+The trained model is outputed in the directory `models/<event-log>/`.
 
-**Shared hyperparams**
-- prefix_len = 5
-- num_epochs = 50
-- Embedding layers
-  - emb_activity: `sqrt(len(set(activity)))`
-  - emb_resource: `sqrt(len(set(resource)))`
-- lr: [1e-3, 1e-6]
-- weight_decay: {0, 1e-2, 1e-3}
-- batch_size: {64, 256, 512}
-- optmizers
-  - sgd
-    - momentum: 0.9
-  - adam
-- lr_scheduler: `MultiStepLR(optm, milestones=[25, 35], gamma=0.1)`
+---
 
-**Baseline**
+## Simulation
+
+After training the model, run `./simulate.py`. Arguments:
+
+- `--log-name`: event log to be used as input
 
 
-- LSTM block
-  - input_dim: len(emb_activity) + len(emb_resource) + len(\[remaining_time\])
-  - hidden_size: 256
-  - num_layers: 2
-- MLP block
-  ```
-  nn.Sequential(
-            nn.Linear(1 + (self.hidden_size * self.prefix_len), 512),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.BatchNorm1d(256),
-            nn.ReLU(),
-  )``` 
-- output layers
-  - in_dim: 256
-  - out_dim: self.vocabs[feature]["size"] if categorical 1 otherwise
-  
-**DeepGenerator**
-- LSTM block
-  - input_dim: len(emb_activity) + len(emb_resource) + len(\
-  - hidden_size: 256
-  - num_layers: 1
-- specielized block
-  - lstm 
-    - input_dim = 256
-    - hidden_size = 256
-    - num_layers = 1
-  - linear layer
-    - input_dim: 1 + hidden_size * prefix_len
-    - out_dim: self.vocabs[feature]["size"] if categorical 1 otherwise
+The simulated log is ouputed at `data/simulation/`.
 
