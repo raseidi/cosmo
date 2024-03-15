@@ -15,7 +15,7 @@ except ImportError:
     _has_wandb = False
 
 
-def train_step(model, data_loader, device, optimizer, scaler, grad_clip=None):
+def train_step(model, data_loader, optimizer, scaler, grad_clip=None):
     model.train()
     a_loss, t_loss, a_acc = 0, 0, 0
     for batch, items in enumerate(data_loader):
@@ -25,30 +25,29 @@ def train_step(model, data_loader, device, optimizer, scaler, grad_clip=None):
             items["constraints"],
             items["target"],
         )
-        # cat, num, constraints, target = (
-        #     cat.to(device),
-        #     num.to(device),
-        #     constraints.to(device),
-        #     target.to(device),
-        # )
-        optimizer.zero_grad()
-        with torch.autocast(device_type='cuda', dtype=torch.float16):
-            logits, reg, _ = model((cat, num), constraints)
-            # logits, _ = model((cat, num), constraints)
-            logits = logits.view(-1, logits.shape[-1])
 
+        optimizer.zero_grad()
+        with torch.autocast(device_type="cuda", dtype=torch.float16):
             target = target.view(-1)
             mask = target != 0
+
+            logits, reg, _ = model(x=(cat, num), constraints=constraints, mask=mask)
+            logits = logits.view(-1, logits.shape[-1])
 
             a_l = F.cross_entropy(logits, target, ignore_index=0, reduction="sum")
             a_l = a_l / mask.sum().item()
             a_loss += a_l.item()
 
-            t_l = F.mse_loss(reg.view(-1)[mask], num.view(-1)[mask], reduction="sum")
-            t_l = t_l / mask.sum().item()
-            t_loss += t_l.item()
+            if reg is not None:
+                t_l = F.mse_loss(
+                    reg.view(-1)[mask], num.view(-1)[mask], reduction="sum"
+                )
+                t_l = t_l / mask.sum().item()
+                t_loss += t_l.item()
+                loss = a_l + t_l
+            else:
+                loss = a_l
 
-            loss = a_l + t_l
             y_pred_class = torch.argmax(torch.softmax(logits, dim=1), dim=-1)
             a_acc += (
                 y_pred_class[mask] == target[mask].view(-1)
@@ -60,7 +59,6 @@ def train_step(model, data_loader, device, optimizer, scaler, grad_clip=None):
             clip_grad_norm_(model.parameters(), grad_clip)
         scaler.step(optimizer)
         scaler.update()
-        
 
     a_loss /= len(data_loader)
     t_loss /= len(data_loader)
@@ -69,7 +67,7 @@ def train_step(model, data_loader, device, optimizer, scaler, grad_clip=None):
     # return a_loss, a_acc
 
 
-def eval(model, data_loader, device):
+def eval(model, data_loader):
     model.eval()
     a_loss, t_loss, a_acc = 0, 0, 0
     with torch.inference_mode():
@@ -80,15 +78,11 @@ def eval(model, data_loader, device):
                 items["constraints"],
                 items["target"],
             )
-            # cat, num, constraints, target = (
-            #     cat.to(device),
-            #     num.to(device),
-            #     constraints.to(device),
-            #     target.to(device),
-            # )
-            with torch.autocast(device_type='cuda', dtype=torch.float16):
-                logits, reg, _ = model((cat, num), constraints)
-                # logits, _ = model((cat, num), constraints)
+            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                target = target.view(-1)
+                mask = target != 0
+                logits, reg, _ = model(x=(cat, num), constraints=constraints, mask=mask)
+
                 logits = logits.view(-1, logits.shape[-1])
 
                 target = target.view(-1)
@@ -98,9 +92,12 @@ def eval(model, data_loader, device):
                 a_l = a_l / mask.sum().item()
                 a_loss += a_l.item()
 
-                t_l = F.mse_loss(reg.view(-1)[mask], num.view(-1)[mask], reduction="sum")
-                t_l = t_l / mask.sum().item()
-                t_loss += t_l.item()
+                if reg is not None:
+                    t_l = F.mse_loss(
+                        reg.view(-1)[mask], num.view(-1)[mask], reduction="sum"
+                    )
+                    t_l = t_l / mask.sum().item()
+                    t_loss += t_l.item()
 
                 y_pred_class = torch.argmax(torch.softmax(logits, dim=1), dim=-1)
                 a_acc += (
@@ -138,33 +135,17 @@ def train(
     no_improve_epoch = 0
     for epoch in range(config["epochs"]):
         train_a_loss, train_t_loss, train_a_acc = train_step(
-            # train_a_loss, train_a_acc = train_step(
             model=model,
             data_loader=train_loader,
-            # loss_fn=loss_fn,
-            device=config["device"],
             optimizer=optimizer,
-            # scheduler=scheduler,
             scaler=scaler,
             grad_clip=config["grad_clip"],
         )
         test_a_loss, test_t_loss, test_a_acc = eval(
-            # test_a_loss, test_a_acc = eval(
             model=model,
             data_loader=test_loader,
-            # loss_fn=loss_fn,
-            device=config["device"],
         )
         scheduler.step()
-        # scheduler.step(test_a_loss + test_t_loss)
-
-        if test_a_loss < best_test_loss:
-            best_test_loss = test_a_loss
-            no_improve_epoch = 0
-        else:
-            no_improve_epoch += 1
-        if no_improve_epoch > 30:
-            break
 
         print(
             f"Epoch: {epoch+1} | "
@@ -197,6 +178,7 @@ def train(
             )
 
         # check point
+        # TODO: if checkpoint:
         cpkt = {
             "epoch": epoch,
             "test_a_acc": test_a_acc,
@@ -206,8 +188,16 @@ def train(
             "optim": optimizer.state_dict(),
         }
 
-        is_best = test_a_acc > best_acc
+        is_best = test_a_loss < best_test_loss
         if is_best:
             save_checkpoint(cpkt, config["run_name"], config)
+
+        if test_a_loss < best_test_loss:
+            best_test_loss = test_a_loss
+            no_improve_epoch = 0
+        else:
+            no_improve_epoch += 1
+        if no_improve_epoch > 30:
+            break
 
     return results

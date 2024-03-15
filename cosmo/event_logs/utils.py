@@ -7,6 +7,7 @@ import pm4py
 
 PATH_ROOT = "data/"
 
+
 def clear_cache(log=None):
     if log:
         pass
@@ -33,6 +34,7 @@ def read_log(path):
         raise ValueError("Log not found at path: {}".format(path))
 
     return log
+
 
 # def cache(file_name="cached_log", format=".pkl", fn_name=None):
 def cache(fn):

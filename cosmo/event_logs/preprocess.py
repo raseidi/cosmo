@@ -44,7 +44,7 @@ def _common_preprocessing(log):
     # 0. drop nan cases
     log = log.dropna(subset=["case_id"])
     log.case_id = log.case_id.astype(str)
-    
+
     # 1. drop activities with frequency less than 5%
     # activities with frequencies less than 5% are dropped
     # activities = log.activity.value_counts()
@@ -65,8 +65,10 @@ def _common_preprocessing(log):
     # log = log.groupby("case_id").size().gt(avg + std)#filter(lambda x: len(x) < avg + std)
 
     # 3. drop incomplete traces based on the last activity frequency
-    # traces where the last activities have frequencies less than 5% are dropped    
-    last_activities = (log.groupby("case_id")["activity"].last().value_counts() / (log["case_id"].nunique()))
+    # traces where the last activities have frequencies less than 5% are dropped
+    last_activities = log.groupby("case_id")["activity"].last().value_counts() / (
+        log["case_id"].nunique()
+    )
     last_activities = (last_activities[last_activities > 0.05]).index.values
 
     valid_cases = log.groupby("case_id")["activity"].last().isin(last_activities)
@@ -122,7 +124,7 @@ def time_feature_engineering(log, group_cols):
     ).timestamp.transform("max")
     log["remaining_time"] = (log["remaining_time"] - log["timestamp"]).astype(
         int
-    ) // 10**9
+    ) // 10 ** 9
 
     # log = (
     # .assign(year=lambda df: df["timestamp"].dt.year)

@@ -1,3 +1,3 @@
-from cosmo.simulation.simulation import simulate
+from cosmo.simulation.simulation import constrained_simulation, sthocastic_simulation
 
-__all__ = ["simulate"]
+__all__ = ["constrained_simulation", "sthocastic_simulation"]

@@ -39,6 +39,7 @@ AVAILABLE_LOGS = [
     "bpi12",
     "bpi13_incidents",
     "bpi13_problems",
+    "bpi15",
     "bpi17",
     "bpi19",
     "bpi20_domestic",
@@ -51,30 +52,30 @@ AVAILABLE_LOGS = [
 
 DECLARE_TEMPLATES = {
     "existence": [
-        'Existence1',
-        'Absence1',
-        'Exactly1',
-        'End',
+        "Existence1",
+        "Absence1",
+        "Exactly1",
+        "End",
     ],
     "choice": [
-        'Choice',
-        'Exclusive Choice',
+        "Choice",
+        "Exclusive Choice",
     ],
-    "positive relations": [        
-        'Alternate Precedence',
-        'Alternate Response',
-        'Chain Precedence',
-        'Chain Response',
-        'Precedence',
-        'Responded Existence',
-        'Response'
+    "positive relations": [
+        "Alternate Precedence",
+        "Alternate Response",
+        "Chain Precedence",
+        "Chain Response",
+        "Precedence",
+        "Responded Existence",
+        "Response",
     ],
     "negative relations": [
-        'Not Chain Precedence',
-        'Not Chain Response',
-        'Not Precedence',
-        'Not Responded Existence',
-        'Not Response',
+        "Not Chain Precedence",
+        "Not Chain Response",
+        "Not Precedence",
+        "Not Responded Existence",
+        "Not Response",
     ],
 }
 
@@ -83,27 +84,30 @@ def get_declare(dataset, templates="all"):
     if templates != "all":
         templates = DECLARE_TEMPLATES.get(templates, None)
         if templates is None:
-            raise ValueError(f"Invalid template. Choose from {list(DECLARE_TEMPLATES.keys())} or 'all' to use all templates.")
+            raise ValueError(
+                f"Invalid template. Choose from {list(DECLARE_TEMPLATES.keys())} or 'all' to use all templates."
+            )
 
     assert dataset in AVAILABLE_LOGS, f"Dataset {dataset} not available"
-    
+
     declare_path = os.path.join(PATH_ROOT, dataset, "declare", "constraints.pkl")
     d = pd.read_pickle(declare_path)
     d.case_id = d.case_id.astype(str)
     d.set_index(["case_id"], inplace=True)
-    
-    # selecting templates 
+
+    # selecting templates
     # TODO: this version only works for single template or all templates
     if templates != "all":
         cols = [c for c in d.columns if c.split("[")[0] in templates]
         d = d[cols]
-        
+
     # dropping constraints with variance less than 5% to improve training and avoid sparse matrix full of zeros
-    constrs = (d.var() > 0.05)
+    constrs = d.var() > 0.05
     constrs = constrs[constrs].index.values
     d = d[constrs].reset_index()
-    
+
     return d
+
 
 @cache
 @common_preprocessing
@@ -265,8 +269,19 @@ def sepsis(path=None):
     train_set.loc[:, "split"] = "train"
     test_set.loc[:, "split"] = "test"
     log = pd.concat([train_set, test_set])
-    
+
     activities = log.activity.value_counts()
     activities = activities[activities >= 0.05 * len(log)].index.values
     log = log[log.activity.isin(activities)]
+    return log
+
+
+@cache
+@common_preprocessing
+def bpi15():
+    train = pd.read_csv(os.path.join(PATH_ROOT, "bpi15", "train_test", "train.csv"))
+    test = pd.read_csv(os.path.join(PATH_ROOT, "bpi15", "train_test", "test.csv"))
+    train["split"] = "train"
+    test["split"] = "test"
+    log = pd.concat([train, test])
     return log

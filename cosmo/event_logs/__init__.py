@@ -2,6 +2,7 @@ from .reader import (
     bpi12,
     bpi13_incidents,
     bpi13_problems,
+    bpi15,
     bpi17,
     bpi19,
     # bpi20_domestic,
@@ -16,11 +17,12 @@ from .as_dataset import ContinuousTraces, ConstrainedContinuousTraces
 
 
 LOG_READERS = {
-    # "bpi12": bpi12,
+    "bpi12": bpi12,
     "bpi13_incidents": bpi13_incidents,
     "bpi13_problems": bpi13_problems,
+    "bpi15": bpi15,
     "bpi17": bpi17,
-    # "bpi19": bpi19,
+    "bpi19": bpi19,
     # "bpi20_domestic": bpi20_domestic,
     # "bpi20_international": bpi20_international,
     "bpi20_permit": bpi20_permit,

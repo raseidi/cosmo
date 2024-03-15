@@ -41,6 +41,15 @@ def fetch_experiments(project="cosmo-v4"):
 
     api = wandb.Api()
     runs = api.runs("raseidi/" + project)
+    metrics = [
+        "train_a_loss",
+        "train_a_acc",
+        "train_t_loss",
+        "test_a_loss",
+        "test_a_acc",
+        "test_t_loss",
+        "_runtime",
+    ]
 
     experiments = pd.DataFrame()
     for r in runs:
@@ -49,6 +58,10 @@ def fetch_experiments(project="cosmo-v4"):
 
         new = pd.DataFrame([r.config])
         new["id"] = r.id
+        new["name"] = r.name
+
+        for m in metrics:
+            new[m] = r.summary[m]
         experiments = pd.concat((experiments, new), ignore_index=True)
 
     experiments.reset_index(inplace=True, drop=True)

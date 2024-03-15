@@ -4,7 +4,7 @@ from cosmo.utils import fetch_experiments
 
 def read_args():
     args = argparse.ArgumentParser()
-    args.add_argument("--project", type=str, default="raseidi/cosmo-v4")
+    args.add_argument("--project", type=str, default="cosmo-bpm24")
     return args.parse_args()
 
 

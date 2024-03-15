@@ -1,40 +1,57 @@
 import pprint
 import warnings
-import wandb
 import torch
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from cosmo.event_logs import ConstrainedContinuousTraces
 from cosmo.event_logs.utils import collate_fn
-from cosmo.models import NeuralNet
+
+# from cosmo.models import NeuralNet
 from cosmo.engine import train
 from cosmo.event_logs import get_declare, LOG_READERS
 import argparse
+from cosmo.models import Cosmo
 from cosmo.utils import experiment_exists
+
+try:
+    import wandb
+
+    _has_wandb = True
+except ImportError:
+    _has_wandb = False
 
 # seed everything
 torch.manual_seed(42)
 
+
 def read_args():
     args = argparse.ArgumentParser()
-    args.add_argument("--dataset", type=str, default="bpi20_permit")
-    args.add_argument("--lr", type=float, default=0.0005)
-    args.add_argument("--batch-size", type=int, default=16)
-    args.add_argument("--weight-decay", type=float, default=1e-1)
-    args.add_argument("--epochs", type=int, default=50)
+    args.add_argument("--dataset", type=str, default="sepsis")
+    args.add_argument("--lr", type=float, default=5e-4)
+    args.add_argument("--batch-size", type=int, default=32)
+    args.add_argument("--weight-decay", type=float, default=1e-5)
+    args.add_argument("--epochs", type=int, default=1000)
     args.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
     args.add_argument("--shuffle-dataset", type=bool, default=True)
-    args.add_argument("--hidden-size", type=int, default=256)
-    args.add_argument("--input-size", type=int, default=32)
-    args.add_argument("--project-name", type=str, default="cosmo-v7")
+    args.add_argument("--hidden-size", type=int, default=32)
+    args.add_argument("--input-size", type=int, default=8)
+    args.add_argument("--project-name", type=str, default="cosmo-bpm-sim")
     args.add_argument("--grad-clip", type=float, default=None)
     args.add_argument("--n-layers", type=int, default=1)
-    args.add_argument("--wandb", type=bool, default=False)
+    args.add_argument("--wandb", type=str, default="False")
     args.add_argument("--template", type=str, default="all")
+    args.add_argument("--backbone", type=str, default="crnn")
+    args.add_argument("--lora", type=str, default="False")
+    args.add_argument("--r-rank", type=int, default=32)
+    args.add_argument("--lora-alpha", type=int, default=64)
+    args.add_argument("--n-heads", type=int, default=1)
+    args = args.parse_args()
 
-    return args.parse_args()
+    args.lora = args.lora == "True"
+    args.wandb = args.wandb == "True"
+    return args
 
 
 def run(config):
@@ -88,33 +105,36 @@ def run(config):
         collate_fn=collate_fn,
     )
 
-    # model
-    model = NeuralNet(
+    model = Cosmo(
         vocabs=train_dataset.feature2idx,
-        continuous_size=train_dataset.num_cont_features,
-        constraint_size=train_dataset.num_constraints,
-        input_size=config["input_size"],
+        n_continuous=train_dataset.num_cont_features,
+        n_constraints=train_dataset.num_constraints,
+        backbone_model=config["backbone"],
+        embedding_size=config["input_size"],
         hidden_size=config["hidden_size"],
         n_layers=config["n_layers"],
+        lora=True,
+        r_rank=config["r_rank"],
+        lora_alpha=config["lora_alpha"],
+        n_heads=config["n_heads"],
     )
+    model.to(config["device"])
 
     optim = torch.optim.AdamW(
         model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"]
     )
-    # optim = torch.optim.SGD(model.parameters(), lr=config["lr"], momentum=0.9, weight_decay=0.01)
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, factor=0.1, patience=10, verbose=True)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optim, T_max=config["epochs"] * config["batch_size"], verbose=True
     )
     scaler = torch.cuda.amp.GradScaler()
 
+    # run_name = f"backbone={config['backbone']}-templates={config['template']}-lr={config['lr']}-bs={config['batch_size']}-hidden={config['hidden_size']}-input={config['input_size']}-nlayers={config['n_layers']}-rank={config['r_rank']}-alpha={config['lora_alpha']}-lora={str(config['lora'])}"
+    run_name = f"backbone={config['backbone']}-lr={config['lr']}-bs={config['batch_size']}-hidden={config['hidden_size']}-input={config['input_size']}-nheads={config['n_heads']}"
 
-    run_name = f"{config['dataset']}-templates={config['template']}-n_features={train_dataset.num_features}-lr={config['lr']}-bs={config['batch_size']}-wd={config['weight_decay']}-epochs{config['epochs']}-hidden={config['hidden_size']}-input={config['input_size']}-gradclip={config['grad_clip']}-nlayers={config['n_layers']}"
-    
-    if config["wandb"]:
+    if config["wandb"] and _has_wandb:
         wandb.init(project=config["project_name"], config=config, name=run_name)
         wandb.watch(model, log="all")
-    
+
     config["run_name"] = run_name
 
     train(
@@ -126,28 +146,35 @@ def run(config):
         config=config,
         scheduler=scheduler,
     )
-    if config["wandb"]:
+    if config["wandb"] and _has_wandb:
         wandb.finish()
+
 
 if __name__ == "__main__":
     config = read_args()
     config = vars(config)
-    if config["dataset"] == "bpi19":
-        exit(0)
-    
+
     print("\n\nConfig:")
-    pprint.pprint(config)
+    # pprint.pprint(config)
 
     if experiment_exists(config):
         print("Experiment exists, skipping...\n\n")
         exit(0)
 
-    if config["hidden_size"] < config["input_size"]:
-        print("Hidden size must be greater than input size")
-        exit(1)
+    # # temporary loop to persist selected models
+    # import pandas as pd
+    # selected_models = pd.read_csv("selected_models.csv")
+    # COLS = ["dataset", "backbone", "lr", "epochs", "batch_size", "template", "n_layers", "input_size", "hidden_size", ]
+    # for ix, row in selected_models.iterrows():
+    #     if ix <= 14:
+    #         continue
+    #     for c in COLS:
+    #         config[c] = row[c]
 
-    print("Running...")
+    #     if row.backbone == "vanilla":
+    #         config["template"] = "all"
+    #     pprint.pprint(config)
     run(config)
+
     # import cProfile
     # cProfile.runctx('run(config)', globals(), locals(), filename="train.prof", sort="cumtime")
-

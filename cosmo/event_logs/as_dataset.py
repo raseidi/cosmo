@@ -9,6 +9,7 @@ from collections import OrderedDict
 
 from cosmo.utils import ensure_dir
 
+
 class EventLogDataset(Dataset):
     _cases: list[str] = None
     _num_features: int = None
@@ -25,8 +26,8 @@ class EventLogDataset(Dataset):
         categorical_features: List[str] = ["activity"],
         continuous_features: List[str] = None,
         target: str = "activity",
-        dataset_name:str = None,
-        train: bool = True
+        dataset_name: str = None,
+        train: bool = True,
     ):
         self.log = log.copy().reset_index(drop=True)
         self.categorical_features = categorical_features
@@ -35,7 +36,7 @@ class EventLogDataset(Dataset):
         self.train = train
         self.dataset_name = dataset_name
         self.set_vocab(vocab)
-        
+
     def set_vocab(self, vocab):
         if vocab is None:
             self.feature2idx = OrderedDict()
@@ -64,10 +65,10 @@ class EventLogDataset(Dataset):
                 )
         else:
             self.feature2idx, self.idx2feature = vocab
-            
+
     def __getitem__(self, index):
         raise "Not implemented"
-    
+
     def __len__(self):
         raise "Not implemented"
 
@@ -99,12 +100,12 @@ class ContinuousTraces(Dataset):
         categorical_features: List[str] = ["activity"],
         continuous_features: List[str] = None,
         target: str = "activity",
-        dataset_name:str = None,
-        train: bool = True
+        dataset_name: str = None,
+        train: bool = True,
     ):
         self.log = log
         self.categorical_features = categorical_features
-        self.continuous_features = continuous_features
+        self.continuous_features = continuous_features if continuous_features else []
         self.target = target
         self.train = train
         self.dataset_name = dataset_name
@@ -139,7 +140,6 @@ class ContinuousTraces(Dataset):
                 )
         else:
             self.feature2idx, self.idx2feature = vocab
-
 
     def get_vocabs(self):
         """This method is necessary for the test set to
@@ -178,7 +178,7 @@ class ContinuousTraces(Dataset):
     def __getitem__(self, idx: int):
         case_id = self.cases[idx]
         return self.dataset[case_id]
-    
+
     def get_case(self, case_id: str):
         case_id = list(self.cases).index(case_id)
         return self[case_id]
@@ -187,14 +187,15 @@ class ContinuousTraces(Dataset):
     # this is super slow, gotta fix it later; for now, we'll just cache the tensors in the disk
     def _build_dataset(self):
         import os
+
         # ToDo: cache properly
         split = "train" if self.train else "test"
-        
+
         if len(self.dataset_name.split("_")) == 2:
-            dataset_name, template  = self.dataset_name.split("_")
+            dataset_name, template = self.dataset_name.split("_")
         else:
             a, b, template = self.dataset_name.split("_")
-            dataset_name =  a + "_" + b
+            dataset_name = a + "_" + b
         path = f"data/{dataset_name}/cached_train_test/dataset_{template}_{split}.pt"
         if os.path.exists(path):
             tensors = torch.load(path)
@@ -205,7 +206,7 @@ class ContinuousTraces(Dataset):
             for cat in self.categorical_features:
                 data[cat] = data[cat].map(self.feature2idx[cat], na_action="ignore")
                 data[cat] = data[cat].fillna(self.UNK_IDX)
-            
+
             for case_id in self.cases:
                 tensors[case_id] = {}
                 trace = data[data["case_id"] == case_id]
@@ -223,8 +224,10 @@ class ContinuousTraces(Dataset):
                         )
                 for feature in self.continuous_features:
                     values = trace[feature].values[:-1]
-                    tensors[case_id][f"num_{feature}"] = torch.tensor(values, dtype=torch.float)
-            
+                    tensors[case_id][f"num_{feature}"] = torch.tensor(
+                        values, dtype=torch.float
+                    )
+
             torch.save(tensors, path)
             del data
         return tensors
@@ -234,7 +237,6 @@ class ContinuousTraces(Dataset):
 
     def get_itos(self):
         return self.idx2feature
-
 
 
 class ConstrainedContinuousTraces(ContinuousTraces):
@@ -247,17 +249,17 @@ class ConstrainedContinuousTraces(ContinuousTraces):
         vocab: Tuple[dict, dict] = None,
         categorical_features: List[str] = ["activity"],
         continuous_features: List[str] = None,
-        dataset_name:str = None,
+        dataset_name: str = None,
         train: bool = True,
         device: str = None,
     ):
         super().__init__(
-            log=log, 
-            vocab=vocab, 
-            categorical_features=categorical_features, 
-            continuous_features=continuous_features, 
-            dataset_name=dataset_name, 
-            train=train
+            log=log,
+            vocab=vocab,
+            categorical_features=categorical_features,
+            continuous_features=continuous_features,
+            dataset_name=dataset_name,
+            train=train,
         )
         self.constraints = constraints
         self.dataset_name = dataset_name
@@ -275,18 +277,19 @@ class ConstrainedContinuousTraces(ContinuousTraces):
     def __getitem__(self, idx: int):
         # making it explict but we don't need to override this method
         return super().__getitem__(idx)
-    
+
     def _build_constrained_dataset(self):
         import os
+
         # ToDo: cache properly
         split = "train" if self.train else "test"
 
         if len(self.dataset_name.split("_")) == 2:
-            dataset_name, template  = self.dataset_name.split("_")
+            dataset_name, template = self.dataset_name.split("_")
         else:
             a, b, template = self.dataset_name.split("_")
-            dataset_name =  a + "_" + b
-        
+            dataset_name = a + "_" + b
+
         path = f"data/{dataset_name}/cached_train_test/dataset_{template}_{split}.pt"
         if os.path.exists(path):
             self.dataset = torch.load(path)
@@ -294,14 +297,18 @@ class ConstrainedContinuousTraces(ContinuousTraces):
         if "constraints" not in self.dataset[self.log.case_id.unique()[0]]:
             for case_id in self.cases:
                 trace = self.constraints[self.constraints.index == case_id]
-                self.dataset[case_id]["constraints"] = torch.tensor(trace.values, dtype=torch.long)
-            
+                self.dataset[case_id]["constraints"] = torch.tensor(
+                    trace.values, dtype=torch.float32
+                )
+
             torch.save(self.dataset, path)
-            
+
         if self.device is not None:
             for case_id in self.cases:
                 for feature in self.dataset[case_id]:
-                    self.dataset[case_id][feature] = self.dataset[case_id][feature].to(self.device)
+                    self.dataset[case_id][feature] = self.dataset[case_id][feature].to(
+                        self.device
+                    )
         return self.dataset
 
     @property
@@ -309,6 +316,7 @@ class ConstrainedContinuousTraces(ContinuousTraces):
         if self._num_constraints is None:
             self._num_constraints = self.constraints.shape[1]
         return self._num_constraints
+
 
 # class PrefixTraces(EventLogDataset):
 #     def __init__(
@@ -324,22 +332,22 @@ class ConstrainedContinuousTraces(ContinuousTraces):
 #         prefix_len: int = 5,
 #     ):
 #         super().__init__(
-#             log=log, 
-#             vocab=vocab, 
-#             categorical_features=categorical_features, 
-#             continuous_features=continuous_features, 
-#             dataset_name=dataset_name, 
+#             log=log,
+#             vocab=vocab,
+#             categorical_features=categorical_features,
+#             continuous_features=continuous_features,
+#             dataset_name=dataset_name,
 #             train=train
 #         )
 #         self.prefix_len = prefix_len
 #         self._build_dataset()
-        
+
 #     def __getitem__(self, index: int):
 #         pass
-    
+
 #     def __len__(self) -> int:
 #         pass
-    
+
 #     def _build_dataset(self):
 #         import pandas as pd
 #         pad_row = self.log.iloc[0].copy()
@@ -365,7 +373,7 @@ class ConstrainedContinuousTraces(ContinuousTraces):
 #         # train = train[1:]
 #         # test = test[1:]     # ignoring index-0: pad reference
 #         return train
-    
+
 #     def index_of_ngrams(key, log):
 #         prefix_len=5 # TODO FIX with starmap
 #         from nltk import ngrams
@@ -381,7 +389,7 @@ class ConstrainedContinuousTraces(ContinuousTraces):
 #         group = log[log.case_id=="AKA"].reset_index().groupby("case_id")["index"]
 #         with multiprocessing.Pool(20) as pool:
 #             cases_ngrams = pool.starmap(f_ngram, group)
-            
+
 #         cases_ngrams
 #         group.size().idxmin()
 #         group.last()
