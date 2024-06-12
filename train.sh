@@ -11,8 +11,7 @@ declare -a TEMPLATES=("existence" "choice" "positive relations")
 
 PROJECT="cosmo-bpm-sim"
 
-# declare -a DATASETS=("sepsis" "bpi12" "bpi13_incidents" "bpi13_problems" "bpi17" "bpi19" "bpi20_permit" "bpi20_prepaid" "bpi20_req4pay")
-declare -a DATASETS=("bpi17")
+declare -a DATASETS=("sepsis" "bpi12" "bpi13_incidents" "bpi20_permit" "bpi17")
 
 for dataset in "${DATASETS[@]}"
 do
@@ -20,7 +19,7 @@ do
     python preprocess_log.py --log-name $dataset
 done
 
-python get_experiments.py --project $PROJECT
+# python get_experiments.py --project $PROJECT
 
 for dataset in "${DATASETS[@]}"
 do

@@ -269,6 +269,11 @@ def sepsis(path=None):
     train_set.loc[:, "split"] = "train"
     test_set.loc[:, "split"] = "test"
     log = pd.concat([train_set, test_set])
+    log = log.rename(columns={
+        "case:concept:name": "case_id",
+        "concept:name": "activity",
+        "time:timestamp": "timestamp",
+    })
 
     activities = log.activity.value_counts()
     activities = activities[activities >= 0.05 * len(log)].index.values

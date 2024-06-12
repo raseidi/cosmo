@@ -3,17 +3,27 @@
 .pytest_cache/
 __pycache__/
 wandb/
-models/
+models/**
+notebooks/**
+
 
 # data
 data/
+data_dev/
+dev/
+
+# bps methods
+simod/
 
 # helpers
 debug.py
 pad.py
 related_paper.md
 cufile.log
-raw_statistics.csv
-statistics.csv
 *.ipynb
-experiments.csv
+tests.py
+notes.md
+
+reproduce_paper_test.sh
+scores*.csv
+selected_models.csv

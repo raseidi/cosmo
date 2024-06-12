@@ -24,7 +24,7 @@ def main(dataset="sepsis", template="all", backbone="vanilla"):
     
     for sim_strat, sampling_strat in inner_loop:
         simulated_log = pd.DataFrame()
-        output_file_name = f"data/simulation/{backbone}/dataset={dataset}-template={template}-sim_strat={sim_strat}.pkl"
+        output_file_name = f"data/simulation/{backbone}/{dataset}-template={template}-sim_strat={sim_strat}.pkl"
         if os.path.exists(output_file_name):
             continue
         

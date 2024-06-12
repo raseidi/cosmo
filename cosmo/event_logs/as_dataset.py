@@ -211,7 +211,6 @@ class ContinuousTraces(Dataset):
                 tensors[case_id] = {}
                 trace = data[data["case_id"] == case_id]
                 for feature in self.categorical_features:
-                    print(len(tensors))
                     values = trace[feature].values
                     tensors[case_id][f"cat_{feature}"] = torch.tensor(
                         values[:-1],

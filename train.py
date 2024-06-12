@@ -30,19 +30,18 @@ def read_args():
     args.add_argument("--lr", type=float, default=5e-4)
     args.add_argument("--batch-size", type=int, default=32)
     args.add_argument("--weight-decay", type=float, default=1e-5)
-    args.add_argument("--epochs", type=int, default=1000)
+    args.add_argument("--epochs", type=int, default=100)
     args.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
-    args.add_argument("--shuffle-dataset", type=bool, default=True)
     args.add_argument("--hidden-size", type=int, default=32)
     args.add_argument("--input-size", type=int, default=8)
     args.add_argument("--project-name", type=str, default="cosmo-bpm-sim")
     args.add_argument("--grad-clip", type=float, default=None)
     args.add_argument("--n-layers", type=int, default=1)
     args.add_argument("--wandb", type=str, default="False")
-    args.add_argument("--template", type=str, default="all")
-    args.add_argument("--backbone", type=str, default="crnn")
+    args.add_argument("--template", type=str, default="choice", choices=["existence", "choice", "positive relations", "all"])
+    args.add_argument("--backbone", type=str, default="crnn", choices=["crnn", "vanilla"])
     args.add_argument("--lora", type=str, default="False")
     args.add_argument("--r-rank", type=int, default=32)
     args.add_argument("--lora-alpha", type=int, default=64)
@@ -129,7 +128,7 @@ def run(config):
     scaler = torch.cuda.amp.GradScaler()
 
     # run_name = f"backbone={config['backbone']}-templates={config['template']}-lr={config['lr']}-bs={config['batch_size']}-hidden={config['hidden_size']}-input={config['input_size']}-nlayers={config['n_layers']}-rank={config['r_rank']}-alpha={config['lora_alpha']}-lora={str(config['lora'])}"
-    run_name = f"backbone={config['backbone']}-lr={config['lr']}-bs={config['batch_size']}-hidden={config['hidden_size']}-input={config['input_size']}-nheads={config['n_heads']}"
+    run_name = f"backbone={config['backbone']}-templates={config['template']}-lr={config['lr']}-bs={config['batch_size']}-hidden={config['hidden_size']}-input={config['input_size']}"
 
     if config["wandb"] and _has_wandb:
         wandb.init(project=config["project_name"], config=config, name=run_name)
@@ -155,25 +154,12 @@ if __name__ == "__main__":
     config = vars(config)
 
     print("\n\nConfig:")
-    # pprint.pprint(config)
+    pprint.pprint(config)
 
     if experiment_exists(config):
         print("Experiment exists, skipping...\n\n")
         exit(0)
-
-    # # temporary loop to persist selected models
-    # import pandas as pd
-    # selected_models = pd.read_csv("selected_models.csv")
-    # COLS = ["dataset", "backbone", "lr", "epochs", "batch_size", "template", "n_layers", "input_size", "hidden_size", ]
-    # for ix, row in selected_models.iterrows():
-    #     if ix <= 14:
-    #         continue
-    #     for c in COLS:
-    #         config[c] = row[c]
-
-    #     if row.backbone == "vanilla":
-    #         config["template"] = "all"
-    #     pprint.pprint(config)
+        
     run(config)
 
     # import cProfile

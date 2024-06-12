@@ -52,13 +52,13 @@ def load_stuff(
         device=config["device"],
     )
 
-    run_name = f"{config['dataset']}-backbone={config['backbone']}-templates={config['template']}-lr={config['lr']}-bs={config['batch_size']}-hidden={config['hidden_size']}-input={config['input_size']}-nlayers={config['n_layers']}-rank={config['r_rank']}-alpha={config['lora_alpha']}-lora={config['lora']}"
+    run_name = f"backbone={config['backbone']}-templates={config['template']}-lr={config['lr']}-bs={config['batch_size']}-hidden={config['hidden_size']}-input={config['input_size']}"
 
     try:
         state = torch.load(f"models/{config['dataset']}/{run_name}.pth")
-    except:
-        run_name = "backbone=vanilla-lr=0.0005-bs=64-hidden=128-input=32-nheads=1"
-        state = torch.load(f"models/{config['dataset']}/{run_name}.pth")
+    except FileNotFoundError as e:
+        message = f"Model not found, please train it first. Run `python train.py --dataset {config['dataset']} --template '{config['template']}' --backbone {config['backbone']} --lr {config['lr']} --batch-size {config['batch_size']} --hidden-size {config['hidden_size']} --input-size {config['input_size']} --n-layers {config['n_layers']} --epochs {config['epochs']}` to train the model."
+        raise FileNotFoundError(message) from e
 
     # model
     model = Cosmo(
