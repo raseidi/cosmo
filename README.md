@@ -77,7 +77,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-Download all the [cached data]([.](https://drive.google.com/file/d/1M6AdQF6Ui0ypxU_0X-1Z9hWUljm7PJuH/view?usp=sharing)). For debugging purposes, we suggest using the `sepsis` event log, as its preprocessing and training times are relatively fast, especially if a GPU is available.
+Download all the [cached data]((https://drive.google.com/file/d/1M6AdQF6Ui0ypxU_0X-1Z9hWUljm7PJuH/view?usp=sharing)). For debugging purposes, we suggest using the `sepsis` event log, as its preprocessing and training times are relatively fast, especially if a GPU is available.
 
 Extract the cached data and make sure the repository looks like:
 
@@ -138,7 +138,7 @@ chmod +x reproduce_paper.sh
 ./reproduce_paper.sh
 ```
 
-If you want to optmize different hyperaparameters, edit the `train.sh` script and run it as the above script. Unfortunetely, though, the current simulation scripts support only the default models trained using the `reproduce_paper.sh` script.
+If you want to optimize different hyperaparameters, edit the `train.sh` script and run it as the above script. Unfortunately, though, the current simulation scripts support only the default models trained using the `reproduce_paper.sh` script.
 
 Find below the available arguments for the `train.py` script:
 
@@ -162,7 +162,7 @@ Find below the available arguments for the `train.py` script:
 
 ### Simulating
 
-As specified in the previous table, you can use the constrained or vanilla rnn for training. Accordingly, all the simulations can be reproduced running the following script after training
+As specified in the previous table, you can use the constrained or vanilla rnn for training. Accordingly, all the simulations can be reproduced by running the following script after training
 
 ```bash
 chmod +x simulation_<backbone>.sh
