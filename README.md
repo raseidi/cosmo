@@ -77,7 +77,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-Download all the [cached data]((https://drive.google.com/file/d/1M6AdQF6Ui0ypxU_0X-1Z9hWUljm7PJuH/view?usp=sharing)). For debugging purposes, we suggest using the `sepsis` event log, as its preprocessing and training times are relatively fast, especially if a GPU is available.
+Download all the [cached data](https://drive.google.com/file/d/1M6AdQF6Ui0ypxU_0X-1Z9hWUljm7PJuH/view?usp=sharing). For debugging purposes, we suggest using the `sepsis` event log, as its preprocessing and training times are relatively fast, especially if a GPU is available.
 
 Extract the cached data and make sure the repository looks like:
 
