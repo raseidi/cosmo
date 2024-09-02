@@ -37,7 +37,11 @@ def get_existing_experiments(force_fetch=False, project="cosmo-ltl"):
 
 
 def fetch_experiments(project="cosmo-v4"):
-    import wandb
+    try:
+        import wandb
+    except ImportError:
+        print("wandb not installed")
+        return
 
     api = wandb.Api()
     runs = api.runs("raseidi/" + project)

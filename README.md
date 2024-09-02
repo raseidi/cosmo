@@ -109,8 +109,8 @@ python preprocess_log.py --log-name sepsis
 or run the following script to extract rules from all event logs:
 
 ```bash
-chmod +x extract_declare.sh
-./extract_declare.sh
+chmod +x scripts/extract_declare.sh
+./scripts/extract_declare.sh
 ```
 
 ### Training
@@ -133,12 +133,12 @@ python train.py \
 or reproduce the whole paper running the following bash script (it might take a few hours)
 
 ```bash
-chmod +x reproduce_paper.sh
+chmod +x scripts/reproduce_paper.sh
 
-./reproduce_paper.sh
+./scripts/reproduce_paper.sh
 ```
 
-If you want to optimize different hyperaparameters, edit the `train.sh` script and run it as the above script. Unfortunately, though, the current simulation scripts support only the default models trained using the `reproduce_paper.sh` script.
+If you want to optimize different hyperaparameters, edit the `scripts/train.sh` script and run it as the above script. Unfortunately, though, the current simulation scripts support only the default models trained using the `scripts/reproduce_paper.sh` script.
 
 Find below the available arguments for the `train.py` script:
 
@@ -165,8 +165,8 @@ Find below the available arguments for the `train.py` script:
 As specified in the previous table, you can use the constrained or vanilla rnn for training. Accordingly, all the simulations can be reproduced by running the following script after training
 
 ```bash
-chmod +x simulation_<backbone>.sh
-./simulation_<backbone>.sh
+chmod +x scripts/simulation_<backbone>.sh
+./scripts/simulation_<backbone>.sh
 ```
 
 where `backbone` is either `crnn` or `vanilla`.

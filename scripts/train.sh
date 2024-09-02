@@ -6,7 +6,7 @@ EPOCHS=(25)
 LAYERS=(1)
 INPUT_SIZES=(32)
 HIDDEN_SIZES=(128)
-declare -a BACKBONES=("vanilla")
+declare -a BACKBONES=("crnn" "vanilla")
 declare -a TEMPLATES=("existence" "choice" "positive relations")
 
 PROJECT="cosmo-bpm-sim"
