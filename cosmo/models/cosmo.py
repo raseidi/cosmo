@@ -11,16 +11,11 @@ class Cosmo(nn.Module):
         vocabs: list,
         n_continuous: int,
         n_constraints: int = None,
-        backbone_model: str = "gpt2",
-        embedding_size: int = 768,
-        hidden_size: int = 768,
+        backbone_model: str = "crnn",
+        embedding_size: int = 32,
+        hidden_size: int = 128,
         n_layers: int = 1,
         batch_first: bool = True,
-        lora: bool = False,
-        r_rank: int = 8,
-        lora_alpha: int = 32,
-        n_heads: int = 1,
-        backbone_kwargs: dict = {},
     ):
         super(Cosmo, self).__init__()
         if backbone_model != "vanilla":
@@ -37,7 +32,6 @@ class Cosmo(nn.Module):
         self.n_layers = n_layers
         self.backbone_model = backbone_model
         self.batch_first = batch_first
-        self.lora = lora
 
         if backbone_model == "vanilla":
             self.backbone = bb.VanillaRNN(
@@ -87,8 +81,7 @@ class Cosmo(nn.Module):
         if n_continuous > 0:
             self.regressor = OutLayer(self.hidden_size // 2, n_continuous)
 
-        if backbone_model not in ["gpt2"]:
-            self.init_params()
+        self.init_params()
 
     def forward(self, x, constraints=None, mask=None, h=None):
         # in layer

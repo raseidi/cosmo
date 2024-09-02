@@ -112,10 +112,6 @@ def run(config):
         embedding_size=config["input_size"],
         hidden_size=config["hidden_size"],
         n_layers=config["n_layers"],
-        lora=True,
-        r_rank=config["r_rank"],
-        lora_alpha=config["lora_alpha"],
-        n_heads=config["n_heads"],
     )
     model.to(config["device"])
 
