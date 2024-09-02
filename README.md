@@ -1,6 +1,6 @@
 # COnditioned process Simulation MOdels (CoSMo)
 
-Codebase for the [CoSMo paper](https://arxiv.org/abs/2303.17879) accepted at the BPM'24 conference. 
+Codebase for the [CoSMo paper](https://link.springer.com/chapter/10.1007/978-3-031-70396-6_19) accepted at the BPM'24 conference. 
 
 ---
 
@@ -51,7 +51,7 @@ I have made significant efforts to ensure this repository is reproducible and un
 
 ## Installation
 
-Instructions for setting up the environment and installing the dependencies for this repository.
+Instructions for setting up the environment and installing the dependencies for this repository. Make sure to use python3.10.
 
 **Note**: Tested only on Ubuntu.
 
@@ -64,10 +64,10 @@ git clone https://github.com/raseidi/cosmo.git
 cd cosmo
 
 # Create a virtual environment (tested with conda 23.11.0 only)
-conda create --name cosmo
+conda create --name cosmo python=3.10
 
 # using pyenv should be
-python -m venv cosmoenv
+python3.10 -m venv cosmoenv
 source cosmoenv/bin/activate  # On Windows use `cosmoenv\Scripts\activate`
 
 # Install required packages
@@ -219,20 +219,22 @@ data/simulation/
 
 ## Citation
 
-*To appear on BPM'24*.
-
 ```bibtex
-@article{Oyamada2023cosmo,
-  author       = {Rafael Seidi Oyamada and
-                  Gabriel M. Tavares and
-                  Paolo Ceravolo},
-  title        = {CoSMo: a Framework for Implementing Conditioned Process Simulation
-                  Models},
-  journal      = {CoRR},
-  volume       = {abs/2303.17879},
-  year         = {2023},
-  url          = {https://doi.org/10.48550/arXiv.2303.17879},
-  doi          = {10.48550/ARXIV.2303.17879},
-  eprinttype    = {arXiv},
+@InProceedings{Oyamada2023cosmo,
+  author="Oyamada, Rafael Seidi
+  and Marques Tavares, Gabriel
+  and Barbon Junior, Sylvio
+  and Ceravolo, Paolo",
+  editor="Marrella, Andrea
+  and Resinas, Manuel
+  and Jans, Mieke
+  and Rosemann, Michael",
+  title="CoSMo: A Framework to Instantiate Conditioned Process Simulation Models",
+  booktitle="Business Process Management",
+  year="2024",
+  publisher="Springer Nature Switzerland",
+  address="Cham",
+  pages="328--344",
+  isbn="978-3-031-70396-6"
 }
 ```

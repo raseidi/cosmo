@@ -5,6 +5,7 @@ __pycache__/
 wandb/
 models/**
 notebooks/**
+cosmoenv/
 
 
 # data
